@@ -1041,7 +1041,8 @@ function announce(k,v){ if(k==="sprint") say(f1(v).replace(","," Komma ")+" Seku
 
 /* =================== Start =================== */
 document.addEventListener("visibilitychange",function(){ if(document.visibilityState==="visible"&&(IV||G)) wake(true); });
-show((location.hash||"#heute").replace("#",""));
+try{ if(location.hash) history.replaceState(null,"",location.pathname+location.search); }catch(e){}
+show("heute");
 var pend=lsGet("bft_live"); if(pend){ try{ var po=JSON.parse(pend); if(po&&po.start){ $("sessModal").classList.remove("hidden"); gpsSession(po.kind,po.plan,parseD(po.date)); } }catch(e){} }
 })();
 </script>
