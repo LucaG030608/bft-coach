@@ -515,8 +515,8 @@ function renderHeute(){
     h+='<div class="sec">Training</div>';
     if(note) h+='<div class="muted small" style="margin:-4px 2px 8px">'+note+'</div>';
     h+='<div class="card">'+unitRows(d,true);
-    if(isT && !tests().length) h+='<div class="row tap" id="baseTest"><div class="ic">'+IC.target+'</div><div class="tx"><div class="t">Ausgangstest machen</div><div class="m">Danach passen sich Intervall-Zeiten und Klimmhang-Programm an</div></div><div class="end">'+IC.chev+'</div></div>';
     h+='</div>';
+    if(isT && !tests().length) h+='<div class="sec">Noch offen</div><div class="card"><div class="row tap" id="baseTest"><div class="ic">'+IC.target+'</div><div class="tx"><div class="t">Ausgangstest (einmalig)</div><div class="m">Nicht zusätzlich: Mach ihn an einem Tag statt der Einheit dort. Danach passen sich Intervall-Zeiten und Klimmhang an.</div></div><div class="end">'+IC.chev+'</div></div></div>';
   }
   if(isT){
     var lw=lastWeight();
