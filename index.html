@@ -273,6 +273,7 @@ var GYM={
 function dayUnits(d){
   var w=planWeek(d), ph=phaseOf(d), dow=d.getDay(), u=[];
   if(w<1 || ph.key==="dienst") return u;
+  if((dienstD()-d)/864e5<=2.5) return u; // letzte 2 Tage vor Dienstantritt: Ruhe
   if(dow===1) u.push({kind:"gym",key:"LA"});
   if(dow===2) u.push({kind:"gym",key:"UA"});
   if(dow===3){ var wp=wedPlan(w,d); u.push({kind: wp.type==="marsch"?"march":"run", plan:wp}); }
@@ -346,17 +347,17 @@ Tracker.prototype.onPos=function(pos){ var c=pos.coords,t=Date.now(); this.acc=c
 Tracker.prototype.speed=function(){ if(this.win.length<3) return null; var span=(this.win[this.win.length-1].t-this.win[0].t)/1000; if(span<25) return null; var d=this.win.reduce(function(s,x){return s+x.d;},0); return d/span*3.6; };
 
 function nutrition(d){
-  var units=dayUnits(d), extra=0, label="Krafttag", tips=[];
+  // Basis = Ruhetag (Erhaltung ohne Training). Zuschläge nach geschätztem Mehrverbrauch der Einheit (~78 kg Körpergewicht).
+  var units=dayUnits(d), extra=0, label="Ruhetag", tips=[], gym=false;
   units.forEach(function(u){
+    if(u.kind==="gym"){ gym=true; if(label==="Ruhetag") label="Krafttag"; }
     if(u.kind==="march"){ extra+=u.plan.kcal; label="Marschtag"; tips.push("Vorher kohlenhydratreich frühstücken, unterwegs Wasser (und ab 90 Min. ein Snack)."); }
-    if(u.kind==="interval"){ extra+=250; label="Intervalltag"; tips.push("2–3 Std. vor der Bahn eine kohlenhydratreiche Mahlzeit, 30–45 Min. vorher dein Apfelsaft."); }
-    if(u.kind==="run"&&u.plan.type==="long"){ extra+=350; label="Lauftag"; }
-    if(u.kind==="run"&&u.plan.type==="easy"){ extra+=250; label="Lauftag"; }
-    if(u.kind==="run"&&u.plan.type==="lauf"){ extra+=250; label="Lauftag"; }
-    if(u.kind==="test"){ extra+=150; label="Testtag"; tips.push("Testtag: gut frühstücken, ggf. ~230 mg Koffein 1 Std. vorher (nur wenn im Training getestet)."); }
+    if(u.kind==="interval"){ extra+=300; label="Intervalltag"; tips.push("2–3 Std. vor der Bahn eine kohlenhydratreiche Mahlzeit, 30–45 Min. vorher dein Apfelsaft."); }
+    if(u.kind==="run"){ var p=u.plan, mins=p.type==="long"?50:p.type==="easy"?p.min:(p.kmT||5)*6; extra+=Math.round(mins*9/50)*50; label="Lauftag"; }
+    if(u.kind==="test"){ extra+=250; label="Testtag"; tips.push("Testtag: gut frühstücken, ggf. ~230 mg Koffein 1 Std. vorher (nur wenn im Training getestet)."); }
   });
-  var base=2950; if(!units.length){ label="Ruhetag"; base=2850; }
-  var corr=S.kcalAdj||0, kcal=base+extra+corr, p=160, f=75, c=Math.round((kcal-p*4-f*9)/4);
+  if(gym) extra+=100;
+  var corr=S.kcalAdj||0, kcal=2850+extra+corr, p=160, f=75, c=Math.round((kcal-p*4-f*9)/4);
   return {label:label,kcal:kcal,p:p,c:c,f:f,tips:tips,gkg:c/(lastWeight()||77.6)};
 }
 function st(k,v){ return '<div class="stat"><div class="muted small">'+k+'</div><div class="sv">'+v+'</div></div>'; }
@@ -610,7 +611,7 @@ function backgroundHtml(){
   function d(t,b){ return '<details style="border-bottom:1px solid var(--line)"><summary>'+t+'</summary><div class="muted" style="padding-bottom:12px">'+b+'</div></details>'; }
   return d("Warum der Plan so aufgebaut ist",'<ul class="tips"><li>Kraft und Ausdauer vertragen sich: Maximalkraft und Muskelaufbau leiden kaum, nur die Explosivkraft – deshalb Sprünge immer zuerst (Schumann 2022).</li><li>1000 m sind überwiegend aerob – Grundlagenläufe und VO2max-Intervalle sind der Haupthebel (Duffield 2005).</li><li>VO2max-Intervalle: ≥ 2 Min. pro Wiederholung, ≥ 15 Min. hart pro Einheit, über 4–12 Wochen (Wen 2019).</li><li>80/20: ca. 80 % locker, 20 % hart.</li><li>Schweres Krafttraining plus Sprünge macht Läufer schneller (Llanos-Lagos 2024).</li><li>Märsche: 2× pro Monat bringt bei zusätzlichem Lauf- und Krafttraining so viel wie 4× (Knapik).</li><li>Formspitze: 2 Wochen, Volumen −40–60 %, Intensität bleibt (Bosquet 2007).</li></ul>')+
    d("BFT-Ablauf",'<ul class="tips"><li>Pendellauf 11×10 m: Start aus der Bauchlage. Bestehen unter 60 s, sehr gut um 42 s.</li><li>Klimmhang: Kammgriff (Untergriff), Kinn über der Stange. Bestehen ab 5 s, Bestnote ab ca. 65 s.</li><li>1000 m: 2,5 Runden. Bestehen unter 6:30.</li><li>Wende: tief, mit dem äußeren Fuß bremsen, kurze Schritte.</li></ul>')+
-   d("Ernährung",'<ul class="tips"><li>Eiweiß 160 g (≈ 2 g/kg), verteilt auf 4 Mahlzeiten à ~30 g (Schoenfeld & Aragon 2018).</li><li>Kalorien je nach Tag: Ruhetag 2.850, Krafttag 2.950, Lauf-/Intervalltag +250–350, Marschtag + Marsch-Plus. Bei 3.100 kcal hattest du zugenommen.</li><li>Kohlenhydrate 5–7 g/kg, an harten Tagen 6–10 g/kg.</li><li>Kreatin 3–5 g täglich. Koffein nur am Testtag (~230 mg, vorher ausprobieren).</li><li>Gewicht 77–79 kg halten. Waage entscheidet, Korrektur per Knopf.</li></ul>')+
+   d("Ernährung",'<ul class="tips"><li>Eiweiß 160 g (≈ 2 g/kg), verteilt auf 4 Mahlzeiten à ~30 g (Schoenfeld & Aragon 2018).</li><li>Kalorien je nach Tag: Ruhetag 2.850, Gym +100, lockerer Lauf ca. +250–400 (je nach Dauer), Intervalle +300, Marsch +300–1.000 (je nach Länge und Gepäck). Im Wochenschnitt ca. 3.000–3.150. Bei 3.100 kcal hattest du zugenommen.</li><li>Kohlenhydrate 5–7 g/kg, an harten Tagen 6–10 g/kg.</li><li>Kreatin 3–5 g täglich. Koffein nur am Testtag (~230 mg, vorher ausprobieren).</li><li>Gewicht 77–79 kg halten. Waage entscheidet, Korrektur per Knopf.</li></ul>')+
    d("Warnsignale",'<ul class="tips"><li>Punktueller Schienbeinschmerz, stechendes Knie, steife Achillessehne am Morgen.</li><li>Leistung sinkt 2 Wochen in Folge, schlechter Schlaf.</li><li>Dann: Freitagslauf weglassen, Woche wiederholen. Bleibt es, ärztlich abklären.</li></ul>');
 }
 
