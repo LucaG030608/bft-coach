@@ -184,6 +184,8 @@
   .phase div{height:6px;border-radius:3px;background:var(--fill)}
   .phase div.cur{background:var(--accent2)}
   .inline{display:flex;gap:8px;align-items:center}
+  .howto{background:var(--glass);border:1px solid var(--gline);border-radius:16px;padding:0 12px 10px;margin:10px 0}
+  .howto summary{padding:10px 0 4px;font-size:14px}
   .live{color:var(--warn);font-weight:600;font-size:13px}
 </style>
 </head>
@@ -1016,6 +1018,15 @@ function testSession(d){
     var names=["Pendellauf 11×10 m","Klimmhang (Kammgriff)","1000 m (2,5 Runden)"], keys=["sprint","hang","run1000"];
     keys.forEach(function(k,i){ var v=T[k];
       h+='<div class="unit"><div class="t">'+(i+1)+'. '+names[i]+' '+(v?'<span class="tag g">'+(k==="run1000"?mmss(v):f1(v)+" s")+'</span>':'')+'</div>';
+      if(i===step && k==="sprint") h+='<details class="howto" open><summary>So läuft der Pendellauf</summary><ul class="tips small">'+
+        '<li><b>Aufbau:</b> Matte am Start, Pylone 10 m entfernt (von der Matte aus gemessen).</li>'+
+        '<li><b>Start:</b> Bauchlage auf der Matte. Auf das Signal aufspringen, zur Pylone sprinten, sie umrunden und zurück.</li>'+
+        '<li><b>Auf der Matte:</b> wieder auf den Bauch legen, Hände hinter dem Rücken zusammenklatschen, sofort wieder hoch.</li>'+
+        '<li><b>Ablauf:</b> 6-mal aufstehen: 6-mal zur Pylone, 5-mal zurück zur Matte = 11 × 10 m.</li>'+
+        '<li><b>Ende:</b> Nach dem 6. Aufstehen nur noch zur Pylone durchsprinten, dort stoppt die Zeit (nicht auf der Matte).</li>'+
+        '<li><b>Allein stoppen:</b> Handy neben die Matte, Start tippen, hinlegen, nach dem Piepton loslaufen. Genauer: ein Freund stoppt an der Pylone.</li>'+
+        '<li><b>Tipps:</b> tief und eng um die Pylone, mit dem äußeren Fuß bremsen. Hinlegen: erst Hände auf den Boden, dann Körper ablegen.</li>'+
+        '</ul></details>';
       if(i===step){ h+='<div class="timer" id="tT" style="font-size:44px">0,0</div><div class="btnrow"><button class="btn" id="tGo">Start</button><button class="btn-danger" id="tStop">Stopp</button></div>'+
         '<label>oder Zeit manuell ('+(k==="run1000"?"m:ss":"Sek.")+')</label><div style="display:flex;gap:8px"><input id="tMan" placeholder="'+(k==="run1000"?"3:58":"44,5")+'"><button class="btn2 mini" id="tSet">Übernehmen</button></div>'+(i<2?'<div class="btnrow"><button class="ghost" id="tSkip">Disziplin überspringen</button></div>':''); }
       h+='</div>'; });
