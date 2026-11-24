@@ -265,7 +265,17 @@ function weekMonday(w){ return addDays(startD(),(w-1+(S.offset||0))*7); }
 function taperStart(){ return addDays(dienstD(),-14); }
 function isDeload(w,ph){ var dl = w<=12 ? (w===4||w===8) : ((w-13)%4===0); if(!(w>0 && dl) || ph.key==="taper") return false; return (taperStart()-weekMonday(w))/864e5 >= 21; }
 function isTestFriday(w,d){ var ph=phaseOf(d); if(ph.key==="taper"||ph.key==="dienst") return false; if(isDeload(w,ph)) return true; var fri=addDays(weekMonday(w),4), next=addDays(fri,7); return fri<taperStart() && next>=taperStart(); }
-function reduced(w,ph){ return isDeload(w,ph) || ph.key==="taper"; }
+function reduced(w,ph,d){ var o=d?kcOff(d):null; return isDeload(w,ph) || ph.key==="taper" || (o!==null && o>=3 && o<=7); }
+/* Sporttest beim Karrierecenter: Abstand in Tagen (Test - Tag), null wenn kein Termin */
+function kcOff(d){ if(!S.kc||!S.kc.date) return null; return Math.round((parseD(S.kc.date)-d)/864e5); }
+function kcErgo(){ return !S.kc || S.kc.endur!=="lauf"; }
+function testFriday(w,d){ var o=kcOff(d); if(o!==null && o>-7 && o<=10) return false; return isTestFriday(w,d); }
+function shortPlan(p){
+  if(!p) return null;
+  if(/^Tempo/.test(p.label)) return {kind:"dist",blocks:[{reps:4,m:200,rest:90,pace:"fast"}],label:"Tempo 4×200 m"};
+  if(p.kind==="dist") return {kind:"dist",blocks:[{reps:2,m:500,rest:240,pace:"goal"},{reps:3,m:200,rest:120,pace:"fast"}],label:"Kurz & schnell: 2×500 m + 3×200 m"};
+  var r=Math.max(2,Math.ceil(p.reps/2)); return {kind:"time",reps:r,work:p.work,rest:p.rest,label:"Kurz: "+r+"×"+(p.work/60)+" Min."};
+}
 
 // Mittwoch: Wochen 1–12 Marsch-Aufbau; danach Marsch nur alle 2 Wochen (Knapik: 2x/Monat ≈ 4x/Monat bei Lauf+Kraft)
 var MARCHES=[
@@ -341,16 +351,31 @@ var GYM={
    {n:"Ab-Roller",t:"bw",sets:3,reps:"10"}]}
 };
 function dayUnits(d){
-  var w=planWeek(d), ph=phaseOf(d), dow=d.getDay(), u=[];
+  var w=planWeek(d), ph=phaseOf(d), dow=d.getDay(), u=[], off=kcOff(d);
+  if(off===0) return [{kind:"kc"}];
   if(w<1 || ph.key==="dienst") return u;
   if((dienstD()-d)/864e5<=2.5) return u; // letzte 2 Tage vor Dienstantritt: Ruhe
+  if(off===1) return [{kind:"run",plan:{type:"easy",min:15,act:true,focus:"Aktivierung: 15 Min. locker, 3 Steigerungen à 60 m, 2× 10 s Klimmhang. Früh schlafen."}}];
+  if(off===2) return u;  // Ruhetag vor dem Sporttest
   if(dow===1) u.push({kind:"gym",key:"LA"});
   if(dow===2){ var tp=tempoPlan(w,d); if(tp) u.push({kind:"interval",plan:tp}); u.push({kind:"gym",key:"UA"}); }
   if(dow===3){ var wp=wedPlan(w,d); u.push({kind: wp.type==="marsch"?"march":"run", plan:wp}); }
-  if(dow===4){ var ip=isTestFriday(w,addDays(d,1))?null:intervalPlan(w,d); if(ip) u.push({kind:"interval",plan:ip}); u.push({kind:"gym",key:"UB"}); }
-  if(dow===5 && isTestFriday(w,d)){ u.push({kind:"test"}); return u; }
-  if(dow===5){ var fp=fridayPlan(w,d); if(fp.type==="test") u.push({kind:"test"}); else u.push({kind:"run",plan:{type:"easy",min:fp.min,focus:"Lockerer Lauf im Plauder-Tempo + 4–6 Steigerungen à 80 m"}}); }
+  if(dow===4){ var ip=testFriday(w,addDays(d,1))?null:intervalPlan(w,d); if(ip) u.push({kind:"interval",plan:ip}); u.push({kind:"gym",key:"UB"}); }
+  if(dow===5 && testFriday(w,d)){ u.push({kind:"test"}); return u; }
+  if(dow===5){ var fp=fridayPlan(w,d);
+    if(off!==null && off>7 && off<=21 && kcErgo()){ var last=addDays(d,7); u.push({kind:"ergo",plan:{n:(kcOff(last)<=7?2:1)}}); }
+    else u.push({kind:"run",plan:{type:"easy",min:fp.min,focus:"Lockerer Lauf im Plauder-Tempo + 4–6 Steigerungen à 80 m"}}); }
   if(dow===6) u.push({kind:"gym",key:"LB"});
+  if(off===-1) u=u.filter(function(x){ return x.kind!=="interval"; }).map(function(x){ return x.kind==="march"?{kind:"run",plan:{type:"easy",min:30,focus:"Erholung nach dem Sporttest: 30 Min. locker"}}:x; }); // Tag nach dem Test: nichts Hartes
+  // Mini-Formspitze 7 Tage vor dem Sporttest (Volumen runter, Intensität bleibt)
+  if(off!==null && off>=3 && off<=7){
+    u=u.map(function(x){
+      if(x.kind==="march") return {kind:"run",plan:{type:"easy",min:30,focus:"Formspitze Sporttest: 30 Min. locker statt Marsch"}};
+      if(x.kind==="interval") return off<=3?null:{kind:"interval",plan:shortPlan(x.plan)};
+      if(x.kind==="run" && x.plan.type!=="easy") return {kind:"run",plan:{type:"easy",min:30,focus:"Formspitze Sporttest: locker"}};
+      if(x.kind==="gym" && off<=3 && (x.key==="LA"||x.key==="LB")) return {kind:"run",plan:{type:"easy",min:20,focus:"Keine schweren Beine mehr: 20 Min. locker + 3 Steigerungen"}};
+      return x; }).filter(Boolean);
+  }
   return u;
 }
 function unitDone(d,unit){
@@ -360,7 +385,8 @@ function unitDone(d,unit){
     if(unit.kind==="march") return l.type==="march";
     if(unit.kind==="run") return l.type==="run";
     if(unit.kind==="interval") return l.type==="interval";
-    if(unit.kind==="test") return l.type==="test";
+    if(unit.kind==="test"||unit.kind==="kc") return l.type==="test";
+    if(unit.kind==="ergo") return l.type==="ergo";
     return false; });
 }
 
@@ -454,6 +480,8 @@ function unitInfo(u){
   if(u.kind==="run"){ var p=u.plan; if(p.type==="easy") return {ic:IC.run,t:"Lockerer Lauf",m:p.min+" Min. Plauder-Tempo + Steigerungen"}; if(p.type==="long") return {ic:IC.run,t:"Langer Lauf",m:"45–60 Min. locker"}; return {ic:IC.run,t:"Lauf "+p.km+" km",m:"locker, ohne Gepäck"}; }
   if(u.kind==="interval") return {ic:IC.bolt,t:u.plan.label.replace("BFT-spezifisch ","").replace("Taper: ",""),m:"Laufbahn · danach Oberkörper"};
   if(u.kind==="test") return {ic:IC.target,t:"BFT-Test",m:"Pendellauf, Klimmhang, 1000 m"};
+  if(u.kind==="kc") return {ic:IC.target,t:"Sporttest Karrierecenter",m:"Pendellauf, Klimmhang, "+(S.kc&&S.kc.endur==="ergo"?"3000 m Ergometer":S.kc&&S.kc.endur==="lauf"?"1000 m":"1000 m oder Ergometer")};
+  if(u.kind==="ergo") return {ic:IC.bolt,t:"Fahrradergometer",m:(S.kc&&S.kc.endur==="ergo"?"":"Falls Ergometer im Test · ")+(u.plan.n===2?"3000 m Probefahrt":"5× 1 Min. hart")+" · Gym-Rad"};
   return {ic:"",t:"",m:""};
 }
 function unitRows(d,clickable){
@@ -477,6 +505,11 @@ function renderHeute(){
   h+=topbar(isT?"Heute":DAYLONG[d.getDay()],sub);
   h+=weekStrip(isT?t:d,d);
   if(!isT) h+='<div style="text-align:center;margin:6px 0 2px"><button class="link" id="toToday">Zurück zu heute</button></div>';
+  var ko=kcOff(t);
+  if(ko!==null && ko>=0 && ko<=70){
+    var kt= ko===0?"Heute ist dein Sporttest. Gut frühstücken, 10 Min. aufwärmen. Viel Erfolg!":ko<=2?"Ruhe und Aktivierung. Viel schlafen, normal essen.":ko<=7?"Formspitze: halbe Sätze, kein Marsch, kurze und schnelle Intervalle.":ko<=21?(kcErgo()?"Vorbereitung: Freitags Fahrradergometer statt Lauf.":"Training läuft normal, ab 7 Tagen vorher Formspitze."):"Training läuft normal weiter. Die Vorbereitung startet 3 Wochen vorher.";
+    h+='<div class="card pad" style="margin-top:12px"><div class="inline" style="justify-content:space-between"><div><div class="muted small">Sporttest Karrierecenter</div><div style="font-weight:700;font-size:18px">'+(ko===0?'Heute':ko===1?'Morgen':'In '+ko+' Tagen')+'</div></div><span class="tag g">'+fmtDs(parseD(S.kc.date))+'</span></div><div class="muted small" style="margin-top:6px">'+kt+'</div></div>';
+  }
   if(w>=1 && ph.key!=="dienst"){
     var note = isDeload(w,ph)?"Entlastungswoche – halbe Sätze, Freitag BFT-Test.":ph.key==="taper"?"Formspitze – halbes Volumen, Intensität bleibt.":"";
     h+='<div class="sec">Training</div>';
@@ -557,11 +590,13 @@ function renderFort(){
   $("fTest").onclick=function(){ openUnit({kind:"test"}, today0()); };
   Array.prototype.forEach.call(el.querySelectorAll("[data-del]"),function(b){ b.onclick=function(){ var id=b.getAttribute("data-del"); confirmDlg("Eintrag löschen?","Wird dauerhaft entfernt.","Löschen",function(){ S.logs=S.logs.filter(function(l){return l.id!==id;}); save(); render(); },true); }; });
 }
-function logTitle(l){ return l.type==="gym"?(GYM[l.key]?GYM[l.key].title:"Gym"):l.type==="march"?"Marsch":l.type==="run"?"Lauf":l.type==="interval"?"Intervalle":l.type==="test"?"BFT-Test":l.type; }
+function logTitle(l){ return l.type==="gym"?(GYM[l.key]?GYM[l.key].title:"Gym"):l.type==="march"?"Marsch":l.type==="run"?"Lauf":l.type==="interval"?"Intervalle":l.type==="test"?(l.kc?"Sporttest Karrierecenter":"BFT-Test"):l.type==="ergo"?"Fahrradergometer":l.type; }
 function logSub(l){
   if(l.type==="march") return f2(l.km)+" km · "+(l.kg||0)+" kg · "+hms(l.sec)+" · "+f1(l.kmh)+" km/h";
   if(l.type==="run") return f2(l.km||0)+" km · "+hms(l.sec)+(l.kmh?" · "+paceStr(l.kmh):"");
   if(l.type==="interval") return (l.reps||[]).map(function(r){ return r.m? mmss(r.sec): mmss(r.sec); }).join(" / ");
+  if(l.type==="ergo") return l.sec?"3000 m in "+mmss(l.sec):"Kennenlernen + Intervalle";
+  if(l.type==="test"&&l.ergo3000) return "Pendel "+(l.sprint?f1(l.sprint)+" s":"–")+" · Hang "+(l.hang?Math.round(l.hang)+" s":"–")+" · Ergo "+mmss(l.ergo3000);
   if(l.type==="test") return "Pendel "+(l.sprint?f1(l.sprint)+" s":"–")+" · Hang "+(l.hang?Math.round(l.hang)+" s":"–")+" · 1000 m "+(l.run1000?mmss(l.run1000):"–");
   if(l.type==="gym"){ var n=0; (l.ex||[]).forEach(function(e){ e.sets.forEach(function(s){ if(s.done) n++; }); }); return n+" Sätze"+(l.sprints&&l.sprints.length?" · Pendel "+l.sprints.map(function(x){return f1(x);}).join("/")+" s":""); }
   return "";
@@ -586,6 +621,8 @@ function openSettings(){
   var cw=calWeek(today0());
   openDlg('<div class="sheethead"><div class="ttl">Einstellungen</div><button class="iconbtn" id="sX">'+IC.x+'</button></div>'+
     '<div class="grid2"><div><label>Start Woche 1</label><input type="date" id="sStart" value="'+S.start+'"></div><div><label>Dienstantritt</label><input type="date" id="sDienst" value="'+S.dienst+'"></div></div>'+
+    '<label>Sporttest Karrierecenter (falls in der Einladung)</label><div class="grid2"><div><input type="date" id="sKc" value="'+(S.kc&&S.kc.date||"")+'"></div><div><select id="sKcE"><option value="?"'+(!S.kc||S.kc.endur==="?"?' selected':'')+'>Ausdauer: unbekannt</option><option value="ergo"'+(S.kc&&S.kc.endur==="ergo"?' selected':'')+'>3000 m Ergometer</option><option value="lauf"'+(S.kc&&S.kc.endur==="lauf"?' selected':'')+'>1000 m Lauf</option></select></div></div>'+
+    (S.kc&&S.kc.date?'<div class="btnrow"><button class="ghost" id="sKcDel">Sporttest-Termin entfernen</button></div>':'')+
     '<div class="toggle" style="border-bottom:1px solid var(--line)"><span>Sprachansagen</span><input type="checkbox" id="sVoice" '+(S.voice?'checked':'')+'></div>'+
     '<div class="btnrow"><button class="btn" id="sSave">Speichern</button></div>'+
     '<div class="sec">Plan anpassen</div><div class="muted small">Bei Schmerzen, Krankheit oder einer verpassten Woche: wiederholen statt steigern.</div>'+
@@ -594,7 +631,8 @@ function openSettings(){
     '<div class="btnrow"><button class="btn2" id="bOut">Backup kopieren</button><button class="btn2" id="bIn">Backup einfügen</button></div>'+
     '<div class="sec">Hintergrund</div>'+backgroundHtml());
   $("sX").onclick=closeDlg;
-  $("sSave").onclick=function(){ var a=$("sStart").value,b=$("sDienst").value; if(a) S.start=iso(mondayOf(parseD(a))); if(b) S.dienst=b; S.voice=$("sVoice").checked; weekView=null; save(); closeDlg(); render(); };
+  $("sSave").onclick=function(){ var a=$("sStart").value,b=$("sDienst").value; if(a) S.start=iso(mondayOf(parseD(a))); if(b) S.dienst=b; var kd=$("sKc").value; S.kc=kd?{date:kd,endur:$("sKcE").value}:null; S.voice=$("sVoice").checked; weekView=null; save(); closeDlg(); render(); };
+  var kdl=$("sKcDel"); if(kdl) kdl.onclick=function(){ S.kc=null; save(); closeDlg(); render(); };
   $("sVoice").onchange=function(){ S.voice=$("sVoice").checked; save(); };
   var r=$("sRepeat"); if(r) r.onclick=function(){ S.offset=(S.offset||0)+1; weekView=null; save(); closeDlg(); render(); toast("Diese Woche wird wiederholt."); };
   var u=$("sUndo"); if(u) u.onclick=function(){ S.offset=Math.max(0,(S.offset||0)-1); weekView=null; save(); closeDlg(); render(); };
@@ -604,6 +642,7 @@ function openSettings(){
 function backgroundHtml(){
   function d(t,b){ return '<details style="border-bottom:1px solid var(--line)"><summary>'+t+'</summary><div class="muted" style="padding-bottom:12px">'+b+'</div></details>'; }
   return d("Warum der Plan so aufgebaut ist",'<ul class="tips"><li>Kraft und Ausdauer vertragen sich: Maximalkraft und Muskelaufbau leiden kaum, nur die Explosivkraft – deshalb Sprünge immer zuerst (Schumann 2022).</li><li>1000 m sind überwiegend aerob – Grundlagenläufe und VO2max-Intervalle sind der Haupthebel (Duffield 2005).</li><li>VO2max-Intervalle: ≥ 2 Min. pro Wiederholung, ≥ 15 Min. hart pro Einheit, über 4–12 Wochen (Wen 2019).</li><li>80/20: ca. 80 % locker, 20 % hart.</li><li>Schweres Krafttraining plus Sprünge macht Läufer schneller (Llanos-Lagos 2024).</li><li>Märsche alle 2 Wochen: 2× pro Monat bringt bei zusätzlichem Lauf- und Krafttraining so viel wie 4× (Knapik) und spart Kraft für den BFT.</li><li>Ab Block 2 zweite Tempoeinheit (200er am Dienstag): mehr Training im 1000-m-Tempo, ohne zusätzlichen Lauftag.</li><li>Formspitze: 2 Wochen, Volumen −40–60 %, Intensität bleibt (Bosquet 2007).</li></ul>')+
+   d("Vorbereitung Sporttest Karrierecenter",'<ul class="tips"><li>Datum und Ausdauer-Disziplin trägst du im Zahnrad ein. Der Plan stellt sich automatisch um.</li><li>3 bis 1 Woche vorher: freitags Fahrradergometer (Kennenlernen, dann 3000 m Probefahrt). Auf ungewohnten Geräten verbessert schon wenig Übung Technik und Tempoeinteilung.</li><li>7 Tage vorher Formspitze: halbe Sätze, kein Marsch, Intervalle halbiert bei gleichem Tempo (Bosquet 2007: Volumen runter, Intensität halten).</li><li>3 Tage vorher keine schweren Beine mehr, 2 Tage vorher Ruhetag, am Vortag kurze Aktivierung.</li><li>Kein zusätzlicher BFT-Test in den 10 Tagen davor.</li></ul>')+
    d("BFT-Ablauf",'<ul class="tips"><li>Pendellauf 11×10 m: Start aus der Bauchlage. Bestehen unter 60 s, sehr gut um 42 s.</li><li>Klimmhang: Kammgriff (Untergriff), Kinn über der Stange. Bestehen ab 5 s, Bestnote ab ca. 65 s.</li><li>1000 m: 2,5 Runden. Bestehen unter 6:30.</li><li>Wende: tief, mit dem äußeren Fuß bremsen, kurze Schritte.</li></ul>')+
    d("Warnsignale",'<ul class="tips"><li>Punktueller Schienbeinschmerz, stechendes Knie, steife Achillessehne am Morgen.</li><li>Leistung sinkt 2 Wochen in Folge, schlechter Schlaf.</li><li>Dann: Freitagslauf weglassen, Woche wiederholen. Bleibt es, ärztlich abklären.</li></ul>');
 }
@@ -639,6 +678,25 @@ function openUnit(u,d){
   if(u.kind==="march") return gpsSession("march",u.plan,d);
   if(u.kind==="run") return gpsSession("run",u.plan,d);
   if(u.kind==="test") return testSession(d);
+  if(u.kind==="kc") return testSession(d,"kc");
+  if(u.kind==="ergo") return ergoSession(u.plan,d);
+}
+/* ---------- Fahrradergometer ---------- */
+function ergoSession(plan,d){
+  var probe=plan.n===2, t0=null, iv=null;
+  var h='<div class="shead"><button class="pill" id="eClose">Schließen</button><div class="sc"><div class="st">Fahrradergometer</div><div class="muted small">'+(probe?'3000 m Probefahrt':'Kennenlernen + Intervalle')+'</div></div><span style="width:72px"></span></div>';
+  h+='<div class="exc"><ul class="tips small">'+(probe?
+     '<li>10 Min. einrollen, dann 2 kurze Antritte (10 s).</li><li>3000 m auf Zeit: erste 1000 m kontrolliert, Mitte gleichmäßig hoch, letzte 500 m alles.</li><li>Trittfrequenz ca. 90–110 U/min. Lieber höherer Widerstand als wildes Strampeln.</li><li>Danach 5–10 Min. locker ausrollen.</li>' :
+     '<li>Sattelhöhe einstellen: unten ist das Knie fast gestreckt.</li><li>10 Min. einrollen.</li><li>5× 1 Min. hart (90–110 U/min), 1 Min. locker.</li><li>5 Min. ausrollen. Ziel: Gefühl für Widerstand und Trittfrequenz.</li>')+
+     '</ul><div class="muted small" style="margin-top:6px">Warum: Auf ungewohnten Geräten verbessert schon wenig Übung Technik und Tempoeinteilung deutlich.</div></div>';
+  if(probe) h+='<div class="exc" style="text-align:center"><div class="timer" id="eT">0:00</div><div class="btnrow"><button class="btn" id="eGo">Start</button><button class="btn-danger" id="eStop">Stopp</button></div><label>oder Zeit manuell (m:ss)</label><input id="eMan" placeholder="4:30"></div>';
+  h+='<div class="btnrow"><button class="btn" id="eSave">Einheit speichern</button></div>';
+  $("sessSheet").innerHTML=h;
+  $("eClose").onclick=function(){ clearInterval(iv); closeSess(); };
+  if(probe){ $("eGo").onclick=function(){ initAudio(); wake(true); t0=performance.now(); clearInterval(iv); beep(1100,250); iv=setInterval(function(){ $("eT").textContent=mmss((performance.now()-t0)/1000); },250); };
+    $("eStop").onclick=function(){ if(t0==null) return; clearInterval(iv); var s=(performance.now()-t0)/1000; $("eMan").value=mmss(s); t0=null; beep(600,250); }; }
+  $("eSave").onclick=function(){ var sec=null; if(probe){ var v=($("eMan").value||"").trim(), p=v.split(":"); sec=p.length===2?(+p[0])*60+num(p[1]):num(v); if(!(sec>0)) sec=null; }
+    S.logs.push({id:uid(),date:iso(d),week:planWeek(d),type:"ergo",probe:probe,sec:sec}); save(); clearInterval(iv); wake(false); closeSess(); toast(probe&&sec?"3000 m in "+mmss(sec)+" gespeichert.":"Einheit gespeichert."); };
 }
 
 /* ---------- Gym (Lyfta-Stil) ---------- */
@@ -670,7 +728,7 @@ var gymState=null, gymIv=null;
 function gymDraftSave(){ if(gymState){ gymState.changed=true; lsSet("bft_gym",JSON.stringify(gymState)); } }
 function gymDraft(key,date){ var o=null; try{ o=JSON.parse(lsGet("bft_gym")||"null"); }catch(e){} return o&&o.key===key&&o.date===date?o:null; }
 function gymSession(key,d){
-  var g=GYM[key], w=planWeek(d), ph=phaseOf(d), red=reduced(w,ph), ds=iso(d);
+  var g=GYM[key], w=planWeek(d), ph=phaseOf(d), red=reduced(w,ph,d), ds=iso(d);
   var draft=gymDraft(key,ds);
   if(draft){ gymState=draft; gymState.ex.forEach(function(e){ e.def=g.ex.filter(function(x){return x.n===e.n;})[0]||e.def; e.last=lastSets(e.n,ds); }); renderGym(); return; }
   var existing=S.logs.filter(function(l){return l.type==="gym"&&l.key===key&&l.date===ds;})[0];
@@ -708,7 +766,7 @@ function paintRest(){
 }
 function renderGym(){
   var sheet=$("sessSheet"), keepScroll=sheet.scrollTop;
-  var g=GYM[gymState.key], d=parseD(gymState.date), w=gymState.week, ph=phaseOf(d), red=reduced(w,ph), hp=hangProtocol();
+  var g=GYM[gymState.key], d=parseD(gymState.date), w=gymState.week, ph=phaseOf(d), red=reduced(w,ph,d), hp=hangProtocol();
   var h='<div class="shead"><button class="pill" id="gClose">Schließen</button><div class="sc"><div class="st">'+esc(g.title)+'</div><div class="muted small" id="gEl">'+(gymState.t0?hms((Date.now()-gymState.t0)/1000):'Woche '+w+(red?' · halbe Sätze':''))+'</div></div><button class="pill acc" id="gFinish">Fertig</button></div>';
   if(red) h+='<div class="fb info">'+(ph.key==="taper"?"Formspitze":"Entlastungswoche")+': halbe Sätze, Gewicht bleibt.</div>';
   if(g.drills){
@@ -923,14 +981,16 @@ function finishG(sec,km){
 }
 
 /* ---------- BFT-Test ---------- */
-function testSession(d){
-  var T={sprint:"",hang:"",run1000:""}, step=0;
+function testSession(d,variant){
+  var kc=variant==="kc", erg=kc&&S.kc&&S.kc.endur==="ergo", K3=erg?"ergo3000":"run1000";
+  var T={sprint:"",hang:"",run1000:"",ergo3000:""}, step=0;
+  function isT(k){ return k==="run1000"||k==="ergo3000"; }
   function draw(){
-    var h='<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:800;font-size:18px">BFT-Test</div><button class="pill" id="tClose">Schließen</button></div>';
-    h+='<p class="muted small">Gut aufwärmen (10 Min. + Steigerungen). Reihenfolge wie im echten BFT. Pausen: 5 Min. nach Pendellauf, 10 Min. vor 1000 m.</p>';
-    var names=["Pendellauf 11×10 m","Klimmhang (Kammgriff)","1000 m (2,5 Runden)"], keys=["sprint","hang","run1000"];
+    var h='<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:800;font-size:18px">'+(kc?'Sporttest Karrierecenter':'BFT-Test')+'</div><button class="pill" id="tClose">Schließen</button></div>';
+    h+='<p class="muted small">Gut aufwärmen (10 Min. + Steigerungen). Reihenfolge wie im echten BFT. Pausen: 5 Min. nach Pendellauf, 10 Min. vor '+(erg?'dem Ergometer':'1000 m')+'.</p>';
+    var names=["Pendellauf 11×10 m","Klimmhang (Kammgriff)",erg?"3000 m Fahrradergometer":"1000 m (2,5 Runden)"], keys=["sprint","hang",K3];
     keys.forEach(function(k,i){ var v=T[k];
-      h+='<div class="unit"><div class="t">'+(i+1)+'. '+names[i]+' '+(v?'<span class="tag g">'+(k==="run1000"?mmss(v):f1(v)+" s")+'</span>':'')+'</div>';
+      h+='<div class="unit"><div class="t">'+(i+1)+'. '+names[i]+' '+(v?'<span class="tag g">'+(isT(k)?mmss(v):f1(v)+" s")+'</span>':'')+'</div>';
       if(i===step && k==="sprint") h+='<details class="howto" open><summary>So läuft der Pendellauf</summary><ul class="tips small">'+
         '<li><b>Aufbau:</b> Matte am Start, Pylone 10 m entfernt (von der Matte aus gemessen).</li>'+
         '<li><b>Start:</b> Bauchlage auf der Matte. Auf das Signal aufspringen, zur Pylone sprinten, sie umrunden und zurück.</li>'+
@@ -941,27 +1001,28 @@ function testSession(d){
         '<li><b>Tipps:</b> tief und eng um die Pylone, mit dem äußeren Fuß bremsen. Hinlegen: erst Hände auf den Boden, dann Körper ablegen.</li>'+
         '</ul></details>';
       if(i===step){ h+='<div class="timer" id="tT" style="font-size:44px">0,0</div><div class="btnrow"><button class="btn" id="tGo">Start</button><button class="btn-danger" id="tStop">Stopp</button></div>'+
-        '<label>oder Zeit manuell ('+(k==="run1000"?"m:ss":"Sek.")+')</label><div style="display:flex;gap:8px"><input id="tMan" placeholder="'+(k==="run1000"?"3:58":"44,5")+'"><button class="btn2 mini" id="tSet">Übernehmen</button></div>'+(i<2?'<div class="btnrow"><button class="ghost" id="tSkip">Disziplin überspringen</button></div>':''); }
+        '<label>oder Zeit manuell ('+(isT(k)?"m:ss":"Sek.")+')</label><div style="display:flex;gap:8px"><input id="tMan" placeholder="'+(isT(k)?"3:58":"44,5")+'"><button class="btn2 mini" id="tSet">Übernehmen</button></div>'+(i<2?'<div class="btnrow"><button class="ghost" id="tSkip">Disziplin überspringen</button></div>':''); }
       h+='</div>'; });
     h+='<div class="btnrow"><button class="btn" id="tSave">Test speichern</button></div>';
     $("sessSheet").innerHTML=h;
     $("tClose").onclick=function(){ stopSW2(); closeSess(); };
     var key=keys[step];
-    if($("tGo")) $("tGo").onclick=function(){ initAudio(); wake(true); var c=3; $("tT").textContent=c; beep(700,120); var cd=setInterval(function(){ c--; if(c>0){ $("tT").textContent=c; beep(700,120);} else { clearInterval(cd); beep(1150,300); sw2.t0=performance.now(); sw2.iv=setInterval(function(){ var s=(performance.now()-sw2.t0)/1000; var el=$("tT"); if(el) el.textContent= key==="run1000"? mmss(s) : f1(s); },100); } },1000); };
+    if($("tGo")) $("tGo").onclick=function(){ initAudio(); wake(true); var c=3; $("tT").textContent=c; beep(700,120); var cd=setInterval(function(){ c--; if(c>0){ $("tT").textContent=c; beep(700,120);} else { clearInterval(cd); beep(1150,300); sw2.t0=performance.now(); sw2.iv=setInterval(function(){ var s=(performance.now()-sw2.t0)/1000; var el=$("tT"); if(el) el.textContent= isT(key)? mmss(s) : f1(s); },100); } },1000); };
     if($("tStop")) $("tStop").onclick=function(){ var t=stopSW2(); if(t>1){ T[key]=Math.round(t*10)/10; announce(key,T[key]); step=Math.min(step+1,2); draw(); } };
     if($("tSkip")) $("tSkip").onclick=function(){ stopSW2(); step=Math.min(step+1,2); draw(); };
-    if($("tSet")) $("tSet").onclick=function(){ var v=$("tMan").value.trim(), s; if(key==="run1000"){ var p=v.split(":"); s=p.length===2?(+p[0])*60+num(p[1]):num(v); } else s=num(v); if(s>0){ T[key]=s; step=Math.min(step+1,2); draw(); } };
-    $("tSave").onclick=function(){ if(!T.sprint&&!T.hang&&!T.run1000) return; S.logs.push({id:uid(),date:iso(d),week:planWeek(d),type:"test",sprint:T.sprint||null,hang:T.hang||null,run1000:T.run1000||null}); save(); wake(false); closeSess();
+    if($("tSet")) $("tSet").onclick=function(){ var v=$("tMan").value.trim(), s; if(isT(key)){ var p=v.split(":"); s=p.length===2?(+p[0])*60+num(p[1]):num(v); } else s=num(v); if(s>0){ T[key]=s; step=Math.min(step+1,2); draw(); } };
+    $("tSave").onclick=function(){ if(!T.sprint&&!T.hang&&!T.run1000&&!T.ergo3000) return; S.logs.push({id:uid(),date:iso(d),week:planWeek(d),type:"test",kc:kc,sprint:T.sprint||null,hang:T.hang||null,run1000:T.run1000||null,ergo3000:T.ergo3000||null}); save(); wake(false); closeSess();
       var fb=[]; if(T.sprint) fb.push(T.sprint<42?{c:"ok",t:"Pendellauf "+f1(T.sprint)+" s – sehr gut!"}:{c:"warn",t:"Pendellauf "+f1(T.sprint)+" s – Ziel < 42 s."});
       if(T.hang) fb.push(T.hang>=60?{c:"ok",t:"Klimmhang "+Math.round(T.hang)+" s – Topwert!"}:{c:"warn",t:"Klimmhang "+Math.round(T.hang)+" s – Ziel 60 s."});
       if(T.run1000) fb.push(T.run1000<=230?{c:"ok",t:"1000 m in "+mmss(T.run1000)+" – unter 3:50!"}:{c:"warn",t:"1000 m in "+mmss(T.run1000)+" – Ziel < 3:50. Intervall-Tempos werden jetzt daran angepasst."});
+      if(T.ergo3000) fb.push(T.ergo3000<=225?{c:"ok",t:"3000 m Ergometer in "+mmss(T.ergo3000)+" – Note-1-Bereich!"}:{c:"warn",t:"3000 m Ergometer in "+mmss(T.ergo3000)+" – Note 1 ab 3:45."});
       openDlg('<h3 style="margin-top:0">Test gespeichert</h3>'+fb.map(function(o){return '<div class="fb '+o.c+'">'+esc(o.t)+'</div>';}).join("")+'<div class="btnrow"><button class="btn" id="tOk">OK</button></div>'); $("tOk").onclick=closeDlg; };
   }
   draw();
 }
 var sw2={t0:null,iv:null};
 function stopSW2(){ if(sw2.t0==null) return 0; var t=(performance.now()-sw2.t0)/1000; clearInterval(sw2.iv); sw2.t0=null; beep(600,250); return t; }
-function announce(k,v){ if(k==="sprint") say(f1(v).replace(","," Komma ")+" Sekunden. Jetzt 5 Minuten Pause, dann Klimmhang."); if(k==="hang") say(Math.round(v)+" Sekunden. 10 Minuten Pause, dann 1000 Meter."); if(k==="run1000") say(mmss(v).replace(":"," Minuten ")+" Sekunden."); }
+function announce(k,v){ if(k==="sprint") say(f1(v).replace(","," Komma ")+" Sekunden. Jetzt 5 Minuten Pause, dann Klimmhang."); if(k==="hang") say(Math.round(v)+" Sekunden. 10 Minuten Pause, dann die Ausdauer-Disziplin."); if(k==="run1000"||k==="ergo3000") say(mmss(v).replace(":"," Minuten ")+" Sekunden."); }
 
 /* =================== Start =================== */
 document.addEventListener("visibilitychange",function(){ if(document.visibilityState==="visible"&&(IV||G)) wake(true); });
