@@ -193,7 +193,6 @@
 <div id="scroller"><div class="wrap">
   <section id="v-heute"></section>
   <section id="v-woche" class="hidden"></section>
-  <section id="v-essen" class="hidden"></section>
   <section id="v-fortschritt" class="hidden"></section>
 </div></div>
 
@@ -203,7 +202,6 @@
 <nav>
   <button data-v="heute" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/></svg>Heute</button>
   <button data-v="woche"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8.5 3v4M15.5 3v4"/></svg>Woche</button>
-  <button data-v="essen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v8a2 2 0 0 0 2 2v8M5 3v6M9 3v6M16.5 21V3c-2 1.5-3 4-3 7s1.3 4 3 4"/></svg>Essen</button>
   <button data-v="fortschritt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V4M4 20h16"/><path d="M8 15l3.5-4 3 2.5L19 8"/></svg>Fortschritt</button>
 </nav>
 
@@ -269,34 +267,32 @@ function isDeload(w,ph){ var dl = w<=12 ? (w===4||w===8) : ((w-13)%4===0); if(!(
 function isTestFriday(w,d){ var ph=phaseOf(d); if(ph.key==="taper"||ph.key==="dienst") return false; if(isDeload(w,ph)) return true; var fri=addDays(weekMonday(w),4), next=addDays(fri,7); return fri<taperStart() && next>=taperStart(); }
 function reduced(w,ph){ return isDeload(w,ph) || ph.key==="taper"; }
 
-var PLAN12=[
+// Mittwoch: Wochen 1–12 Marsch-Aufbau; danach Marsch nur alle 2 Wochen (Knapik: 2x/Monat ≈ 4x/Monat bei Lauf+Kraft)
+var MARCHES=[
  {km:"6",kmT:6,kg:10,type:"marsch",focus:"Rucksack-Sitz & Schrittfrequenz testen",kcal:300},
- {km:"8",kmT:8,kg:10,type:"marsch",focus:"Nur Distanz +2 km",kcal:400},
- {km:"8",kmT:8,kg:12.5,type:"marsch",focus:"Nur Gewicht +2,5 kg",kcal:450},
- {km:"5",kmT:5,kg:0,type:"lauf",focus:"Entlastung: lockerer Lauf ohne Gepäck",kcal:0},
+ {km:"8",kmT:8,kg:12.5,type:"marsch",focus:"Distanz und Gewicht leicht rauf",kcal:450},
  {km:"10",kmT:10,kg:15,type:"marsch",focus:"AGA-Standard",kcal:550},
  {km:"12",kmT:12,kg:15,type:"marsch",focus:"AGA-Abschlussmarsch-Test: unter 120 Min.",kcal:650,test:120},
- {km:"14",kmT:14,kg:15,type:"marsch",focus:"Ausdauer festigen (6,2 km/h)",kcal:750},
- {km:"5",kmT:5,kg:0,type:"lauf",focus:"Entlastung: lockerer Lauf ohne Gepäck",kcal:0},
- {km:"12",kmT:12,kg:17.5,type:"marsch",focus:"Gewicht rauf, Distanz runter",kcal:700},
  {km:"15",kmT:15,kg:17.5,type:"marsch",focus:"Konstantes Tempo",kcal:850},
- {km:"15",kmT:15,kg:20,type:"marsch",focus:"Fallschirmjäger-Trainingsgewicht",kcal:900},
- {km:"18–20",kmT:19,kg:20,type:"marsch",focus:"Fallschirmjäger-Einstiegsniveau",kcal:1000}
-];
-// Mittwoch: Wochen 1–12 Marsch-Aufbau; danach Marsch nur alle 2 Wochen (Knapik: 2x/Monat ≈ 4x/Monat bei Lauf+Kraft)
+ {km:"18–20",kmT:19,kg:20,type:"marsch",focus:"Fallschirmjäger-Einstiegsniveau",kcal:1000}];
+function isMarchWeek(v){ var dd=addDays(weekMonday(v),2), ph=phaseOf(dd); return v>=1 && v%2===1 && !isDeload(v,ph) && ph.key!=="taper" && ph.key!=="dienst"; }
+// Mittwoch: Marsch alle 2 Wochen (Knapik: 2x/Monat reicht bei zusätzlichem Lauf- und Krafttraining), dazwischen langer lockerer Lauf
 function wedPlan(w,d){
-  var ph=phaseOf(d);
-  if(w<1) w=1;
-  if(ph.key==="taper") return {km:"8",kmT:8,kg:15,type:"marsch",focus:"Taper: kurzer, lockerer Marsch",kcal:400};
-  if(w<=12) return PLAN12[w-1];
+  var ph=phaseOf(d); if(w<1) w=1;
+  if(ph.key==="taper") return {km:"",kmT:0,min:30,kg:0,type:"easy",focus:"Formspitze: 30 Min. locker, keine Märsche mehr",kcal:250};
   if(isDeload(w,ph)) return {km:"5",kmT:5,kg:0,type:"lauf",focus:"Entlastung: lockerer Lauf ohne Gepäck",kcal:0};
-  var k=w-13;
-  var boots=(d.getMonth()>=6&&d.getMonth()<=8)?" · in Stiefeln":"";
-  if(k%2===1){ var m=(k+1)/2;
-    if(m%2===1) return {km:"18–20",kmT:19,kg:20,type:"marsch",focus:"Marsch A: lang & schwer"+boots,kcal:1000};
-    return {km:"12",kmT:12,kg:20,type:"marsch",focus:"Marsch B: kürzer & zügig (6,5 km/h)"+boots,kcal:650};
-  }
+  if(isMarchWeek(w)){ var m=0; for(var v=1;v<=w;v++) if(isMarchWeek(v)) m++;
+    if(m<=MARCHES.length) return MARCHES[m-1];
+    var boots=(d.getMonth()>=6&&d.getMonth()<=8)?" · in Stiefeln":"";
+    return (ph.key==="b3" || (m-MARCHES.length)%2===1) ? {km:"12",kmT:12,kg:20,type:"marsch",focus:"Marsch B: kürzer & zügig (6,5 km/h)"+boots,kcal:650} : {km:"18–20",kmT:19,kg:20,type:"marsch",focus:"Marsch A: lang & schwer"+boots,kcal:1000}; }
   return {km:"",kmT:0,min:50,kg:0,type:"long",focus:"Langer lockerer Lauf 45–60 Min. (Grundlage, 80/20-Prinzip)",kcal:300};
+}
+// Dienstag ab Block 2: zweite, kurze Tempoeinheit für die 1000 m (vor dem Oberkörper-Training)
+function tempoPlan(w,d){
+  var ph=phaseOf(d); if(isDeload(w,ph)) return null;
+  if(ph.key==="b2") return {kind:"dist",blocks:[{reps:6,m:200,rest:90,pace:"fast"}],label:"Tempo 6×200 m"};
+  if(ph.key==="b3") return {kind:"dist",blocks:[{reps:8,m:200,rest:90,pace:"fast"}],label:"Tempo 8×200 m"};
+  return null;
 }
 // Donnerstag: Intervalle
 function intervalPlan(w,d){
@@ -349,9 +345,9 @@ function dayUnits(d){
   if(w<1 || ph.key==="dienst") return u;
   if((dienstD()-d)/864e5<=2.5) return u; // letzte 2 Tage vor Dienstantritt: Ruhe
   if(dow===1) u.push({kind:"gym",key:"LA"});
-  if(dow===2) u.push({kind:"gym",key:"UA"});
+  if(dow===2){ var tp=tempoPlan(w,d); if(tp) u.push({kind:"interval",plan:tp}); u.push({kind:"gym",key:"UA"}); }
   if(dow===3){ var wp=wedPlan(w,d); u.push({kind: wp.type==="marsch"?"march":"run", plan:wp}); }
-  if(dow===4){ var ip=intervalPlan(w,d); if(ip) u.push({kind:"interval",plan:ip}); u.push({kind:"gym",key:"UB"}); }
+  if(dow===4){ var ip=isTestFriday(w,addDays(d,1))?null:intervalPlan(w,d); if(ip) u.push({kind:"interval",plan:ip}); u.push({kind:"gym",key:"UB"}); }
   if(dow===5 && isTestFriday(w,d)){ u.push({kind:"test"}); return u; }
   if(dow===5){ var fp=fridayPlan(w,d); if(fp.type==="test") u.push({kind:"test"}); else u.push({kind:"run",plan:{type:"easy",min:fp.min,focus:"Lockerer Lauf im Plauder-Tempo + 4–6 Steigerungen à 80 m"}}); }
   if(dow===6) u.push({kind:"gym",key:"LB"});
@@ -420,20 +416,6 @@ Tracker.prototype.onPos=function(pos){ var c=pos.coords,t=Date.now(); this.acc=c
   this.last=p; var cut=t-60000; while(this.win.length&&this.win[0].t<cut) this.win.shift(); if(this.cb) this.cb(); };
 Tracker.prototype.speed=function(){ if(this.win.length<3) return null; var span=(this.win[this.win.length-1].t-this.win[0].t)/1000; if(span<25) return null; var d=this.win.reduce(function(s,x){return s+x.d;},0); return d/span*3.6; };
 
-function nutrition(d){
-  // Basis = Ruhetag (Erhaltung ohne Training). Zuschläge nach geschätztem Mehrverbrauch der Einheit (~78 kg Körpergewicht).
-  var units=dayUnits(d), extra=0, label="Ruhetag", tips=[], gym=false;
-  units.forEach(function(u){
-    if(u.kind==="gym"){ gym=true; if(label==="Ruhetag") label="Krafttag"; }
-    if(u.kind==="march"){ extra+=u.plan.kcal; label="Marschtag"; tips.push("Vorher kohlenhydratreich frühstücken, unterwegs Wasser (und ab 90 Min. ein Snack)."); }
-    if(u.kind==="interval"){ extra+=300; label="Intervalltag"; tips.push("2–3 Std. vor der Bahn eine kohlenhydratreiche Mahlzeit, 30–45 Min. vorher dein Apfelsaft."); }
-    if(u.kind==="run"){ var p=u.plan, mins=p.type==="long"?50:p.type==="easy"?p.min:(p.kmT||5)*6; extra+=Math.round(mins*9/50)*50; label="Lauftag"; }
-    if(u.kind==="test"){ extra+=250; label="Testtag"; tips.push("Testtag: gut frühstücken, ggf. ~230 mg Koffein 1 Std. vorher (nur wenn im Training getestet)."); }
-  });
-  if(gym) extra+=100;
-  var corr=S.kcalAdj||0, kcal=2850+extra+corr, p=160, f=75, c=Math.round((kcal-p*4-f*9)/4);
-  return {label:label,kcal:kcal,p:p,c:c,f:f,tips:tips,gkg:c/(lastWeight()||77.6)};
-}
 function st(k,v){ return '<div class="stat"><div class="muted small">'+k+'</div><div class="sv">'+v+'</div></div>'; }
 /* =================== Icons =================== */
 var IC={
@@ -463,7 +445,6 @@ var view="heute", weekView=null, foodDay=null, heuteDay=null, keepFoodDay=false;
 function render(){
   if(view==="heute") renderHeute();
   if(view==="woche") renderWoche();
-  if(view==="essen") renderEssen();
   if(view==="fortschritt") renderFort();
 }
 function phaseName(ph){ return {b1:"Grundlage",b2:"VO2max",b3:"BFT-spezifisch",taper:"Formspitze",dienst:"Dienst"}[ph.key]; }
@@ -489,8 +470,6 @@ function weekStrip(ref,sel){
     h+='<div class="day'+(+d===+t?' today':'')+(sel&&+d===+sel&&+d!==+t?' sel':'')+(dn?' done':'')+(!us.length?' rest':'')+'" data-day="'+iso(d)+'"><div class="c">'+(dn?IC.check.replace('stroke-width="3"','stroke-width="3" width="14" height="14"'):d.getDate())+'</div>'+DAYS[d.getDay()]+'</div>'; }
   return h+'</div>';
 }
-function eaten(ds){ var a=(S.food&&S.food[ds])||[], s={kcal:0,p:0,c:0,f:0}; a.forEach(function(x){ s.kcal+=x.kcal||0; s.p+=x.p||0; s.c+=x.c||0; s.f+=x.f||0; }); return s; }
-function macroBar(name,val,goal,unit){ var pct=goal?Math.min(100,val/goal*100):0; return '<div class="macro"><span>'+name+'</span><div class="bar'+(name!=="Eiweiß"&&val>goal*1.08?' over':'')+'" style="margin:0"><div style="width:'+pct+'%"></div></div><span class="v">'+Math.round(val)+' / '+goal+' '+unit+'</span></div>'; }
 
 function renderHeute(){
   var el=$("v-heute"), t=today0(), d=heuteDay?parseD(heuteDay):t, isT=+d===+t, w=planWeek(d), ph=phaseOf(d), h="";
@@ -506,11 +485,6 @@ function renderHeute(){
     if(isT && !tests().length) h+='<div class="row tap" id="baseTest"><div class="ic">'+IC.target+'</div><div class="tx"><div class="t">Ausgangstest machen</div><div class="m">Danach passen sich Intervall-Zeiten und Klimmhang-Programm an</div></div><div class="end">'+IC.chev+'</div></div>';
     h+='</div>';
   }
-  var n=nutrition(d), e=eaten(iso(d));
-  h+='<div class="sec">Ernährung <button class="link" id="toFood">'+(isT?'Eintragen':'Öffnen')+'</button></div><div class="card pad">'+
-     '<div class="inline" style="justify-content:space-between"><div><span class="big">'+Math.round(e.kcal)+'</span> <span class="muted">/ '+n.kcal+' kcal</span></div><span class="tag">'+n.label+'</span></div>'+
-     '<div class="bar'+(e.kcal>n.kcal*1.08?' over':'')+'"><div style="width:'+Math.min(100,e.kcal/n.kcal*100)+'%"></div></div>'+
-     macroBar("Eiweiß",e.p,n.p,"g")+macroBar("Kohlenh.",e.c,n.c,"g")+macroBar("Fett",e.f,n.f,"g")+'</div>';
   if(isT){
     var lw=lastWeight();
     h+='<div class="sec">Gewicht</div><div class="card pad"><div class="inline"><input id="wIn" inputmode="decimal" placeholder="'+(lw?f1(lw)+" kg":"z. B. 77,6")+'"><button class="btn mini" id="wSave">Speichern</button></div>'+weightAdvice()+'</div>';
@@ -520,8 +494,6 @@ function renderHeute(){
   Array.prototype.forEach.call(el.querySelectorAll("[data-day]"),function(x){ x.onclick=function(){ var v=x.getAttribute("data-day"); heuteDay= v===iso(t)?null:v; render(); }; });
   var tt=$("toToday"); if(tt) tt.onclick=function(){ heuteDay=null; render(); };
   var bt=$("baseTest"); if(bt) bt.onclick=function(){ openUnit({kind:"test"}, t); };
-  $("toFood").onclick=function(){ foodDay=iso(d); keepFoodDay=true; if(location.hash==="#essen") show("essen"); else location.hash="essen"; };
-  Array.prototype.forEach.call(el.querySelectorAll("[data-adj]"),function(b){ b.onclick=function(){ S.kcalAdj=(S.kcalAdj||0)+(+b.getAttribute("data-adj")); save(); render(); }; });
   var ws=$("wSave"); if(ws) ws.onclick=function(){ var v=num($("wIn").value); if(!(v>40&&v<150)) return; S.weights=S.weights.filter(function(x){return x.date!==iso(t);}); S.weights.push({date:iso(t),kg:v}); S.weights.sort(function(a,b){return a.date<b.date?-1:1;}); save(); render(); };
 }
 function lastWeight(){ return S.weights.length? S.weights[S.weights.length-1].kg : null; }
@@ -530,8 +502,8 @@ function weightAdvice(){
   var last=ws[ws.length-1], ref=null; for(var i=ws.length-2;i>=0;i--){ if((parseD(last.date)-parseD(ws[i].date))/864e5>=21){ ref=ws[i]; break; } }
   if(!ref) return '<div class="muted small" style="margin-top:8px">Ziel 77–79 kg. Trend nach 3 Wochen Messungen.</div>';
   var days=(parseD(last.date)-parseD(ref.date))/864e5, pm=(last.kg-ref.kg)/days*30, txt=(pm>0?'+':'')+f1(pm)+' kg/Monat';
-  if(last.kg>79.5||pm>0.6) return '<div class="fb warn">Trend '+txt+' – zu schnell.</div><div class="btnrow"><button class="btn2" data-adj="-150">Kalorien −150</button></div>';
-  if(last.kg<76.5||pm<-0.8) return '<div class="fb warn">Trend '+txt+' – Gewicht fällt.</div><div class="btnrow"><button class="btn2" data-adj="150">Kalorien +150</button></div>';
+  if(last.kg>79.5||pm>0.6) return '<div class="fb warn">Trend '+txt+' – steigt zu schnell. Kalorien etwas senken.</div>';
+  if(last.kg<76.5||pm<-0.8) return '<div class="fb warn">Trend '+txt+' – Gewicht fällt. Mehr essen.</div>';
   return '<div class="muted small" style="margin-top:8px">Trend '+txt+' · im Zielbereich</div>';
 }
 function goalsCard(){
@@ -558,61 +530,6 @@ function renderWoche(){
   el.innerHTML=h; bindTop(el); bindUnits(el);
   $("wPrev").onclick=function(){ if(weekView>1){ weekView--; render(); toTop();} };
   $("wNext").onclick=function(){ if(weekView<endW){ weekView++; render(); toTop();} };
-}
-
-/* ---------- Essen ---------- */
-var PRESETS=[
- {n:"Overnight Oats",d:"120 g Hafer, Quark, Milch, Erdnussbutter, Banane",kcal:990,p:62,c:112,f:29},
- {n:"Spätzle & Hähnchen-Rahm",d:"Meal Prep Lidl",kcal:1040,p:70,c:124,f:27},
- {n:"Rigatoni & Hack-Tomate",d:"Meal Prep REWE",kcal:1100,p:64,c:127,f:35},
- {n:"Apfelsaft 300 ml",d:"Pre-Workout",kcal:138,p:0,c:34,f:0},
- {n:"Whey 30 g",d:"Post-Workout",kcal:113,p:24,c:2,f:1},
- {n:"Magerquark 250 g",d:"z. B. abends",kcal:168,p:30,c:10,f:1},
- {n:"Banane",d:"Snack",kcal:105,p:1,c:27,f:0},
- {n:"Abendessen (Schätzung)",d:"Familienessen ~800 kcal",kcal:800,p:20,c:120,f:27}
-];
-function allPresets(){ return PRESETS.concat(S.presets||[]); }
-function renderEssen(){
-  var el=$("v-essen"), t=today0(); if(!foodDay) foodDay=iso(t);
-  var d=parseD(foodDay), ds=foodDay, n=nutrition(d), e=eaten(ds), list=(S.food&&S.food[ds])||[];
-  var isToday=ds===iso(t);
-  var h='<div class="top"><div><h1>Essen</h1><div class="sub">'+(isToday?"Heute":longDate(d))+' · '+n.label+'</div></div><div class="daynav"><button class="iconbtn" id="fPrev">'+IC.left+'</button><button class="iconbtn" id="fNext">'+IC.chev+'</button><button class="iconbtn" data-settings>'+IC.gear+'</button></div></div>';
-  if(!isToday) h+='<div style="text-align:center;margin:-6px 0 10px"><button class="link" id="fToday">Zurück zu heute</button></div>';
-  var rest=n.kcal-e.kcal;
-  h+='<div class="card pad"><div class="inline" style="justify-content:space-between;align-items:flex-end"><div><div class="muted small">Gegessen</div><span class="big">'+Math.round(e.kcal)+'</span> <span class="muted">/ '+n.kcal+' kcal</span></div><div style="text-align:right"><div class="muted small">'+(rest>=0?'Übrig':'Drüber')+'</div><b style="font-size:18px">'+Math.abs(Math.round(rest))+'</b></div></div>'+
-     '<div class="bar'+(e.kcal>n.kcal*1.08?' over':'')+'"><div style="width:'+Math.min(100,e.kcal/n.kcal*100)+'%"></div></div>'+
-     macroBar("Eiweiß",e.p,n.p,"g")+macroBar("Kohlenh.",e.c,n.c,"g")+macroBar("Fett",e.f,n.f,"g")+
-     '<div class="muted small" style="margin-top:8px">Eiweiß auf 4 Mahlzeiten à ~30 g verteilen – auch abends.'+(n.tips.length?' '+esc(n.tips[0]):'')+'</div></div>';
-  // Kreatin
-  h+='<div class="card"><div class="toggle"><span>Kreatin 3–5 g</span><input type="checkbox" id="crChk" '+(S.creatine[ds]?'checked':'')+'></div></div>';
-  // Schnell hinzufügen
-  h+='<div class="sec">Schnell hinzufügen</div><div class="presets">'+allPresets().map(function(p,i){ return '<button class="preset" data-p="'+i+'">'+esc(p.n)+'<span>'+p.kcal+' kcal · '+p.p+' g E</span></button>'; }).join("")+'</div>';
-  // Liste
-  h+='<div class="sec">'+(isToday?'Heute gegessen':'Gegessen')+' <button class="link" id="fAdd">Eigenes</button></div><div class="card">';
-  if(!list.length) h+='<div class="row"><div class="tx muted">Noch nichts eingetragen.</div></div>';
-  list.forEach(function(x){ h+='<div class="row"><div class="tx"><div class="t">'+esc(x.n)+'</div><div class="m">'+Math.round(x.kcal)+' kcal · E '+Math.round(x.p)+' · K '+Math.round(x.c)+' · F '+Math.round(x.f)+'</div></div><button class="iconbtn" style="box-shadow:none;background:none;color:var(--muted)" data-fdel="'+x.id+'">'+IC.x+'</button></div>'; });
-  h+='</div>';
-  el.innerHTML=h; bindTop(el);
-  $("fPrev").onclick=function(){ foodDay=iso(addDays(d,-1)); render(); };
-  $("fNext").onclick=function(){ foodDay=iso(addDays(d,1)); render(); };
-  var ft=$("fToday"); if(ft) ft.onclick=function(){ foodDay=iso(t); render(); };
-  $("crChk").onchange=function(){ if($("crChk").checked) S.creatine[ds]=1; else delete S.creatine[ds]; save(); };
-  Array.prototype.forEach.call(el.querySelectorAll("[data-p]"),function(b){ b.onclick=function(){ var p=allPresets()[+b.getAttribute("data-p")]; addFood(ds,{n:p.n,kcal:p.kcal,p:p.p,c:p.c,f:p.f}); }; });
-  Array.prototype.forEach.call(el.querySelectorAll("[data-fdel]"),function(b){ b.onclick=function(){ var id=b.getAttribute("data-fdel"); S.food[ds]=S.food[ds].filter(function(x){return x.id!==id;}); save(); render(); }; });
-  $("fAdd").onclick=function(){ foodDlg(ds); };
-}
-function addFood(ds,item){ if(!S.food) S.food={}; if(!S.food[ds]) S.food[ds]=[]; item.id=uid(); S.food[ds].push(item); save(); render(); }
-function foodDlg(ds){
-  openDlg('<div class="sheethead"><div class="ttl">Eigenes eintragen</div><button class="iconbtn" id="cNo">'+IC.x+'</button></div>'+
-    '<label>Name</label><input id="fn" placeholder="z. B. Familienessen">'+
-    '<div class="grid4"><div><label>kcal</label><input id="fk" inputmode="numeric"></div><div><label>Eiweiß</label><input id="fp" inputmode="decimal"></div><div><label>Kohlenh.</label><input id="fc" inputmode="decimal"></div><div><label>Fett</label><input id="ff" inputmode="decimal"></div></div>'+
-    '<div class="toggle"><span>Als Favorit speichern</span><input type="checkbox" id="fs"></div><div id="fe"></div>'+
-    '<div class="btnrow"><button class="btn" id="cYes">Hinzufügen</button></div>');
-  $("cNo").onclick=closeDlg;
-  $("cYes").onclick=function(){ var it={n:$("fn").value.trim()||"Eintrag",kcal:num($("fk").value)||0,p:num($("fp").value)||0,c:num($("fc").value)||0,f:num($("ff").value)||0};
-    if(!it.kcal){ $("fe").innerHTML='<div class="fb bad">Mindestens kcal eintragen.</div>'; return; }
-    if($("fs").checked){ if(!S.presets) S.presets=[]; S.presets.push({n:it.n,d:"Favorit",kcal:it.kcal,p:it.p,c:it.c,f:it.f}); }
-    closeDlg(); addFood(ds,it); };
 }
 
 /* ---------- Fortschritt ---------- */
@@ -673,7 +590,6 @@ function openSettings(){
     '<div class="btnrow"><button class="btn" id="sSave">Speichern</button></div>'+
     '<div class="sec">Plan anpassen</div><div class="muted small">Bei Schmerzen, Krankheit oder einer verpassten Woche: wiederholen statt steigern.</div>'+
     '<div class="btnrow"><button class="btn2" id="sRepeat" '+(cw<1?'disabled':'')+'>Diese Woche wiederholen</button>'+(S.offset?'<button class="btn2" id="sUndo">Rückgängig ('+S.offset+')</button>':'')+'</div>'+
-    (S.kcalAdj?'<div class="btnrow"><button class="btn2" id="sAdj">Kalorien-Korrektur zurücksetzen ('+(S.kcalAdj>0?'+':'')+S.kcalAdj+')</button></div>':'')+
     '<div class="sec">Daten</div><div class="muted small">Alles liegt nur auf diesem Handy. Backup ab und zu in deine Notizen kopieren.</div>'+
     '<div class="btnrow"><button class="btn2" id="bOut">Backup kopieren</button><button class="btn2" id="bIn">Backup einfügen</button></div>'+
     '<div class="sec">Hintergrund</div>'+backgroundHtml());
@@ -682,20 +598,18 @@ function openSettings(){
   $("sVoice").onchange=function(){ S.voice=$("sVoice").checked; save(); };
   var r=$("sRepeat"); if(r) r.onclick=function(){ S.offset=(S.offset||0)+1; weekView=null; save(); closeDlg(); render(); toast("Diese Woche wird wiederholt."); };
   var u=$("sUndo"); if(u) u.onclick=function(){ S.offset=Math.max(0,(S.offset||0)-1); weekView=null; save(); closeDlg(); render(); };
-  var aj=$("sAdj"); if(aj) aj.onclick=function(){ S.kcalAdj=0; save(); closeDlg(); render(); };
   $("bOut").onclick=function(){ var txt=JSON.stringify(S); try{ navigator.clipboard.writeText(txt).then(function(){ toast("Backup kopiert. In deine Notizen einfügen."); },function(){ showText(txt); }); }catch(e){ showText(txt); } };
   $("bIn").onclick=importDlg;
 }
 function backgroundHtml(){
   function d(t,b){ return '<details style="border-bottom:1px solid var(--line)"><summary>'+t+'</summary><div class="muted" style="padding-bottom:12px">'+b+'</div></details>'; }
-  return d("Warum der Plan so aufgebaut ist",'<ul class="tips"><li>Kraft und Ausdauer vertragen sich: Maximalkraft und Muskelaufbau leiden kaum, nur die Explosivkraft – deshalb Sprünge immer zuerst (Schumann 2022).</li><li>1000 m sind überwiegend aerob – Grundlagenläufe und VO2max-Intervalle sind der Haupthebel (Duffield 2005).</li><li>VO2max-Intervalle: ≥ 2 Min. pro Wiederholung, ≥ 15 Min. hart pro Einheit, über 4–12 Wochen (Wen 2019).</li><li>80/20: ca. 80 % locker, 20 % hart.</li><li>Schweres Krafttraining plus Sprünge macht Läufer schneller (Llanos-Lagos 2024).</li><li>Märsche: 2× pro Monat bringt bei zusätzlichem Lauf- und Krafttraining so viel wie 4× (Knapik).</li><li>Formspitze: 2 Wochen, Volumen −40–60 %, Intensität bleibt (Bosquet 2007).</li></ul>')+
+  return d("Warum der Plan so aufgebaut ist",'<ul class="tips"><li>Kraft und Ausdauer vertragen sich: Maximalkraft und Muskelaufbau leiden kaum, nur die Explosivkraft – deshalb Sprünge immer zuerst (Schumann 2022).</li><li>1000 m sind überwiegend aerob – Grundlagenläufe und VO2max-Intervalle sind der Haupthebel (Duffield 2005).</li><li>VO2max-Intervalle: ≥ 2 Min. pro Wiederholung, ≥ 15 Min. hart pro Einheit, über 4–12 Wochen (Wen 2019).</li><li>80/20: ca. 80 % locker, 20 % hart.</li><li>Schweres Krafttraining plus Sprünge macht Läufer schneller (Llanos-Lagos 2024).</li><li>Märsche alle 2 Wochen: 2× pro Monat bringt bei zusätzlichem Lauf- und Krafttraining so viel wie 4× (Knapik) und spart Kraft für den BFT.</li><li>Ab Block 2 zweite Tempoeinheit (200er am Dienstag): mehr Training im 1000-m-Tempo, ohne zusätzlichen Lauftag.</li><li>Formspitze: 2 Wochen, Volumen −40–60 %, Intensität bleibt (Bosquet 2007).</li></ul>')+
    d("BFT-Ablauf",'<ul class="tips"><li>Pendellauf 11×10 m: Start aus der Bauchlage. Bestehen unter 60 s, sehr gut um 42 s.</li><li>Klimmhang: Kammgriff (Untergriff), Kinn über der Stange. Bestehen ab 5 s, Bestnote ab ca. 65 s.</li><li>1000 m: 2,5 Runden. Bestehen unter 6:30.</li><li>Wende: tief, mit dem äußeren Fuß bremsen, kurze Schritte.</li></ul>')+
-   d("Ernährung",'<ul class="tips"><li>Eiweiß 160 g (≈ 2 g/kg), verteilt auf 4 Mahlzeiten à ~30 g (Schoenfeld & Aragon 2018).</li><li>Kalorien je nach Tag: Ruhetag 2.850, Gym +100, lockerer Lauf ca. +250–400 (je nach Dauer), Intervalle +300, Marsch +300–1.000 (je nach Länge und Gepäck). Im Wochenschnitt ca. 3.000–3.150. Bei 3.100 kcal hattest du zugenommen.</li><li>Kohlenhydrate 5–7 g/kg, an harten Tagen 6–10 g/kg.</li><li>Kreatin 3–5 g täglich. Koffein nur am Testtag (~230 mg, vorher ausprobieren).</li><li>Gewicht 77–79 kg halten. Waage entscheidet, Korrektur per Knopf.</li></ul>')+
    d("Warnsignale",'<ul class="tips"><li>Punktueller Schienbeinschmerz, stechendes Knie, steife Achillessehne am Morgen.</li><li>Leistung sinkt 2 Wochen in Folge, schlechter Schlaf.</li><li>Dann: Freitagslauf weglassen, Woche wiederholen. Bleibt es, ärztlich abklären.</li></ul>');
 }
 
 /* =================== Navigation & Dialoge =================== */
-var VIEWS=["heute","woche","essen","fortschritt"];
+var VIEWS=["heute","woche","fortschritt"];
 function show(v){ if(VIEWS.indexOf(v)<0) v="heute"; view=v; VIEWS.forEach(function(x){ $("v-"+x).classList.toggle("hidden",x!==v); });
   Array.prototype.forEach.call(document.querySelectorAll("nav button"),function(b){ b.classList.toggle("on",b.getAttribute("data-v")===v); }); if(v==="essen"){ if(!keepFoodDay) foodDay=iso(today0()); keepFoodDay=false; } if(v==="heute") heuteDay=null; if(v==="woche") weekView=null; render(); toTop(); }
 Array.prototype.forEach.call(document.querySelectorAll("nav button"),function(b){ b.onclick=function(){ var v=b.getAttribute("data-v"); if(location.hash!=="#"+v) location.hash=v; else show(v); }; });
@@ -1004,7 +918,6 @@ function finishG(sec,km){
     if(isM&&p.test===120&&k>=12) out.push(m<=120?{c:"ok",t:"AGA-Test bestanden ("+m+" Min.)."}:{c:"warn",t:"AGA-Test: "+m+" Min., Ziel < 120."});
     if(knee>=4) out.push({c:"bad",t:"Schmerz "+knee+"/10: Nächste Woche nicht steigern – „Diese Woche wiederholen“ (Zahnrad). Bleibt es: ärztlich abklären."}); else if(knee>=2) out.push({c:"warn",t:"Leichter Schmerz – beobachten. In 2 Tagen nicht weg? Woche wiederholen."});
     if(e.blister) out.push({c:"warn",t:"Blasen versorgen, Druckstellen vorher abkleben."});
-    if(isM&&p.kcal) out.push({c:"info",t:"Heute +"+p.kcal+" kcal extra (v. a. Kohlenhydrate)."});
     G=null; $("sessSheet").innerHTML='<h3 style="margin-top:0">Gespeichert</h3>'+out.map(function(o){return '<div class="fb '+o.c+'">'+esc(o.t)+'</div>';}).join("")+'<div class="btnrow"><button class="btn" id="fDone">Fertig</button></div>';
     $("fDone").onclick=closeSess; say(out[0].t); };
 }
