@@ -59,3 +59,16 @@ svg.cell rect:first-child{fill:var(--cell-bg)}
 .rx-grid button{height:64px;border-radius:14px;background:var(--fill);transition:background .1s}
 .rx-grid button.ok{background:var(--ok)}
 .rx-grid button.bad{background:var(--bad)}
+/* Tab Wissen */
+.dgimg{width:58px;height:auto;border-radius:6px;display:block}
+.dgimg.big{width:110px}
+.dggrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.dgcell{min-width:0;overflow-wrap:anywhere;hyphens:auto;background:var(--glass);border:1px solid var(--gline);border-radius:16px;padding:8px;text-align:center;font-weight:600;font-size:13px;display:flex;flex-direction:column;align-items:center;gap:6px}
+.dgcell .dgimg{width:64px}
+.seg3{display:flex;gap:6px;margin:0 0 10px}
+.seg3 .pill{flex:1}
+.nato{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:15px}
+.flash{min-height:220px}
+.cat-opts.g .O .dgimg{width:64px;margin:0 auto}
+.row .end .ghost{padding:7px 10px;font-size:13px}
+.cat-opts.g .cat-opt .O{flex-direction:column;align-items:center;text-align:center;gap:4px}
