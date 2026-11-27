@@ -1,0 +1,50 @@
+/* CAT-Trainer – passt sich an das Glas-Design der BFT-App an */
+:root{ --cell-bg:#ffffff; --cube-top:#ffffff; --cube-l:#d6dbd2; --cube-r:#a7afa2; }
+/* Grafiken immer auf hellem Grund, damit Kontraste wie im Test stimmen */
+.cat-fig svg,.cat-opts.g svg,.cat-fig .cell{color:#141714}
+@media (prefers-color-scheme: dark){ .cat-fig svg,.cat-opts.g .O svg{background:#f4f5f2;border-radius:8px} }
+.cat-timer{display:flex;align-items:center;gap:10px;margin:2px 0 10px}
+.cat-timer .bar{flex:1;margin:0}
+.cat-timer .bar>div{transition:width .25s linear}
+.cat-timer span{font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;min-width:38px;text-align:right}
+.cat-q{color:var(--ink)}
+.cat-tag{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.cat-stem{font-size:18px;font-weight:650;line-height:1.35;margin:6px 0 12px}
+.cat-fig{margin:6px 0 14px;overflow-x:auto;color:var(--ink)}
+.cat-fig svg{max-width:100%;height:auto}
+.cat-opts{display:flex;flex-direction:column;gap:8px}
+.cat-opts.g{display:grid;grid-template-columns:1fr 1fr}
+.cat-opt{display:flex;align-items:center;gap:12px;text-align:left;background:var(--glass);border:1px solid var(--gline);box-shadow:var(--shadow),var(--hl);border-radius:18px;padding:12px 14px;font-weight:500;color:var(--ink);width:100%}
+.cat-opts.g .cat-opt{flex-direction:column;gap:6px;padding:10px}
+.cat-opt .L{flex:none;width:28px;height:28px;border-radius:50%;background:var(--fill);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+.cat-opt .O{flex:1;min-width:0;color:var(--ink)}
+.cat-opts.g .cat-opt .O{display:flex;justify-content:center}
+.cat-opt.on{border-color:var(--accent2);background:var(--soft)}
+.cat-opt.on .L{background:var(--accent);color:var(--accent-ink)}
+.cat-opt.ok{border-color:var(--ok);background:var(--okfill)}
+.cat-opt.ok .L{background:var(--ok);color:#fff}
+.cat-opt.bad{border-color:var(--bad)}
+.cat-opt.bad .L{background:var(--bad);color:#fff}
+.cat-opt svg{color:var(--ink)}
+.btn:disabled{opacity:.45}
+.cat-intro h2{margin:4px 0 6px;font-size:26px;letter-spacing:-.4px}
+.cat-intro p{margin:0 0 14px}
+.series{font-size:24px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums;letter-spacing:.5px;padding:10px 0;word-spacing:4px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:19px;letter-spacing:2px;line-height:1.8;word-break:break-all}
+.cmp{width:auto;margin:0 auto}
+.cmp td{padding:4px 14px;border-bottom:1px solid var(--line)}
+.legend{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:6px}
+.leg{background:var(--fill);border-radius:10px;padding:5px 10px;font-weight:600;font-size:16px}
+.matrix{display:grid;grid-template-columns:repeat(3,80px);gap:4px;justify-content:center}
+.matrix svg,.row svg.cell{display:block}
+.cat-fig .row{display:flex;gap:4px;justify-content:center;flex-wrap:wrap;border:none;padding:0}
+.center{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.box{background:var(--fill);border-radius:14px;padding:6px 14px}
+.cat-mark{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.cat-mark button{width:38px;height:42px;padding:0;border-radius:10px;background:var(--fill);font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:600;color:var(--ink)}
+.cat-mark button.on{background:var(--accent);color:var(--accent-ink)}
+.cat-mark button.ok{outline:3px solid var(--ok)}
+.cat-mark button.bad{background:var(--bad);color:#fff}
+.cat-lvl{position:relative}
+.cat-lvl i{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);opacity:.55;border-radius:1px}
+svg.cell rect:first-child{fill:var(--cell-bg)}
