@@ -7,15 +7,15 @@
   const WORDS = {
     1: ['Fahrrad', 'Kaserne', 'Schlüssel', 'Bäckerei', 'Wohnung', 'Fenster', 'Gewicht', 'Erlebnis', 'Zeitung', 'Wiese', 'Kleidung', 'Geschwindigkeit', 'Spaziergang', 'Mannschaft', 'wahrscheinlich'],
     2: ['Beziehung', 'Maschine', 'Gebäude', 'Bewerbung', 'Krankenhaus', 'Abenteuer', 'Lebensmittel', 'Erfahrung', 'gefährlich', 'Verantwortung', 'Bedienung', 'Fortschritt', 'Unterschied', 'Medizin', 'Dienstag'],
-    3: ['Reparatur', 'Standard', 'Atmosphäre', 'Terrasse', 'Kommission', 'Interesse', 'Satellit', 'Diskussion', 'endgültig', 'Entgelt', 'Gelände', 'Strategie', 'Tradition', 'Verwandtschaft', 'Akkumulator'],
-    4: ['Rhythmus', 'Rezension', 'Kapazität', 'Mentalität', 'Hierarchie', 'Libyen', 'Lizenz', 'Karussell', 'Hygiene', 'Maschinerie', 'Reflexion', 'Paralyse', 'Konkurrenz', 'Assistent', 'Kolonne'],
-    5: ['Rhythmus', 'Apparat', 'Sympathie', 'Konglomerat', 'Inkognito', 'Amateur', 'Accessoire', 'Bredouille', 'Chauffeur', 'Brillant', 'Ressource', 'Dilettant', 'Renommee'],
+    3: ['Reparatur', 'Standard', 'Atmosphäre', 'Terrasse', 'Kommission', 'Interesse', 'Satellit', 'Diskussion', 'endgültig', 'Entgelt', 'Gelände', 'Strategie', 'Tradition', 'Verwandtschaft', 'Akkumulator', 'Disziplin', 'Infanterie', 'Kompanie', 'Garnison', 'Munition', 'Manöver', 'Explosion', 'Katastrophe', 'Kalkulation', 'Pyramide'],
+    4: ['Rhythmus', 'Rezension', 'Kapazität', 'Mentalität', 'Hierarchie', 'Libyen', 'Lizenz', 'Karussell', 'Hygiene', 'Maschinerie', 'Reflexion', 'Paralyse', 'Konkurrenz', 'Assistent', 'Kolonne', 'Artillerie', 'Bataillon', 'Kommandeur', 'Kapitulation', 'Korrespondenz', 'Labyrinth', 'Symmetrie', 'Psychiatrie', 'Dilemma', 'Diskrepanz'],
+    5: ['Rhythmus', 'Apparat', 'Sympathie', 'Konglomerat', 'Inkognito', 'Amateur', 'Accessoire', 'Bredouille', 'Chauffeur', 'Brillant', 'Ressource', 'Dilettant', 'Renommee', 'Kavallerie', 'Akkreditierung', 'Rezeption', 'Physiotherapie', 'Szenario', 'Extremismus', 'Kontroverse', 'Pseudonym', 'Synonym', 'Hydrant', 'Quarantäne', 'Reminiszenz'],
   };
   const RULES = [
     [/ie/, 'i'], [/([^e])i([^e])/, '$1ie$2'], [/([bdfglmnprt])\1/, '$1'], [/([aeiouäöü])([lmnprt])([aeiouäöü])/, '$1$2$2$3'],
     [/ah|eh|oh|uh|äh/, (m) => m[0]], [/ä/, 'e'], [/e(?=[^i])/, 'ä'], [/ss/, 'ß'], [/ß/, 'ss'], [/dt/, 'tt'], [/t$/, 'd'], [/d$/, 't'],
     [/v/, 'f'], [/f/, 'v'], [/tz/, 'z'], [/z/, 'tz'], [/ck/, 'k'], [/k/, 'ck'], [/äu/, 'eu'], [/eu/, 'äu'], [/th/, 't'], [/rh/, 'r'],
-    [/y/, 'ü'], [/ph/, 'f'], [/ei/, 'ai'], [/g(?=$|[^aeiouäöü])/, 'k'], [/b(?=[^aeiouäöüy])/, 'p'], [/a([bdfglmnrst][aeiou])/, 'ah$1'], [/o([bdfglmnrst][aeiou])/, 'oh$1'], [/ung$/, 'unk'], [/s(?=[pt])/, 'sch'], [/([^c])h/, '$1'], [/k/, 'g'], [/ent/, 'end'], [/end/, 'ent'], [/x/, 'chs'], [/c(?=[^hk])/, 'k'], [/ie$/, 'i'], [/e$/, ''],
+    [/y/, 'ü'], [/ph/, 'f'], [/ei/, 'ai'], [/g(?=$|[^aeiouäöü])/, 'k'], [/b(?=[^aeiouäöüy])/, 'p'], [/a([bdfglmnrst][aeiou])/, 'ah$1'], [/o([bdfglmnrst][aeiou])/, 'oh$1'], [/ung$/, 'unk'], [/s(?=[pt])/, 'sch'], [/([^c])h/, '$1'], [/k/, 'g'], [/y/, 'i'], [/([aeiou])s([aeiou])/, '$1ss$2'], [/([^aeiou])i([^aeoun])/, '$1y$2'], [/ung$/, 'ong'], [/ü/, 'ue'], [/ent/, 'end'], [/end/, 'ent'], [/x/, 'chs'], [/c(?=[^hk])/, 'k'], [/ie$/, 'i'], [/e$/, ''],
   ];
   function misspell(w) {
     const out = new Set();
@@ -80,32 +80,6 @@
     { q: 'Welcher Satz ist richtig?', a: ['Ja, ich habe den Befehl verstanden.', 'Ja ich habe, den Befehl verstanden.', 'Ja ich habe den Befehl verstanden.', 'Ja ich, habe den Befehl verstanden.'], l: 4, e: 'Bekräftigungen wie „ja“, „nein“, „doch“ am Satzanfang werden durch Komma abgetrennt.' },
     { q: 'Welcher Satz ist richtig?', a: ['Das Training, das gestern ausfiel, wird am Freitag nachgeholt.', 'Das Training, das gestern ausfiel wird am Freitag nachgeholt.', 'Das Training das gestern ausfiel, wird am Freitag nachgeholt.', 'Das Training, das gestern, ausfiel wird am Freitag nachgeholt.'], l: 4, e: 'Eingeschobener Relativsatz → Komma davor und danach.' },
     { q: 'Welcher Satz ist richtig?', a: ['Er sagte, dass er müde sei, und ging nach Hause.', 'Er sagte, dass er müde sei und ging nach Hause.', 'Er sagte dass er müde sei, und ging nach Hause.', 'Er sagte, dass, er müde sei und ging nach Hause.'], l: 5, e: 'Der eingeschobene dass-Satz muss auch hinten geschlossen werden – auch vor „und“.' },
-  ]);
-
-  /* ---------- Wortanalogien ---------- */
-  C.bank(A, 'analogie', 'Wortanalogien', [
-    { q: 'Buch : Bibliothek = Fisch : ?', a: ['Aquarium', 'Angel', 'Flosse', 'Wasser'], l: 1, e: 'Ort, an dem etwas gesammelt/aufbewahrt wird.' },
-    { q: 'heiß : kalt = laut : ?', a: ['leise', 'still', 'Lärm', 'hoch'], l: 1, e: 'Gegensatzpaare (Adjektive).' },
-    { q: 'Hand : Finger = Fuß : ?', a: ['Zeh', 'Bein', 'Schuh', 'Ferse'], l: 1, e: 'Teil–Ganzes: Finger an der Hand, Zehen am Fuß. (Ferse ist kein „Glied“ wie der Finger.)' },
-    { q: 'Vogel : Nest = Biene : ?', a: ['Bienenstock', 'Honig', 'Blüte', 'Wabe'], l: 1, e: 'Tier und seine Behausung.' },
-    { q: 'Kälte : frieren = Hitze : ?', a: ['schwitzen', 'Sonne', 'Sommer', 'brennen'], l: 2, e: 'Ursache → körperliche Reaktion (Verb).' },
-    { q: 'Säge : Holz = Schere : ?', a: ['Papier', 'Messer', 'schneiden', 'Schneider'], l: 2, e: 'Werkzeug und Material, das es bearbeitet.' },
-    { q: 'Arzt : Krankenhaus = Lehrer : ?', a: ['Schule', 'Schüler', 'Unterricht', 'Tafel'], l: 1, e: 'Beruf und Arbeitsort.' },
-    { q: 'Tulpe : Blume = Eiche : ?', a: ['Baum', 'Holz', 'Wald', 'Blatt'], l: 2, e: 'Unterbegriff : Oberbegriff.' },
-    { q: 'Minute : Stunde = Monat : ?', a: ['Jahr', 'Woche', 'Tag', 'Kalender'], l: 2, e: 'Kleinere Zeiteinheit : nächstgrößere, die sie enthält (12 Monate = 1 Jahr).' },
-    { q: 'Gramm : Gewicht = Meter : ?', a: ['Länge', 'Kilometer', 'Maßband', 'Fläche'], l: 3, e: 'Einheit : gemessene Größe.' },
-    { q: 'Leutnant : Offizier = Feldwebel : ?', a: ['Unteroffizier', 'Mannschaft', 'Hauptmann', 'Gefreiter'], l: 3, e: 'Dienstgrad : Dienstgradgruppe (Feldwebel gehört zu den Unteroffizieren mit Portepee).' },
-    { q: 'Samen : Pflanze = Ei : ?', a: ['Vogel', 'Nest', 'Schale', 'Huhn legen'], l: 3, e: 'Anfangsstadium : entwickeltes Lebewesen.' },
-    { q: 'Dürre : Wassermangel = Hunger : ?', a: ['Nahrungsmangel', 'Essen', 'Durst', 'Magen'], l: 3, e: 'Zustand : seine Ursache (Mangel an …).' },
-    { q: 'Thermometer : Temperatur = Barometer : ?', a: ['Luftdruck', 'Wetter', 'Wind', 'Höhe'], l: 3, e: 'Messgerät : gemessene Größe.' },
-    { q: 'Prolog : Epilog = Ouvertüre : ?', a: ['Finale', 'Oper', 'Orchester', 'Pause'], l: 4, e: 'Anfang : Ende eines Werks.' },
-    { q: 'Wort : Satz = Ton : ?', a: ['Melodie', 'Lautstärke', 'Klavier', 'Note'], l: 4, e: 'Element : daraus zusammengesetzte Einheit.' },
-    { q: 'verschwenderisch : sparsam = mutig : ?', a: ['feige', 'tapfer', 'ängstlich sein', 'Mut'], l: 4, e: 'Gegensatzpaare gleicher Wortart (Adjektiv).' },
-    { q: 'Kompass : Richtung = Uhr : ?', a: ['Zeit', 'Zeiger', 'Stunde', 'Wecker'], l: 2, e: 'Instrument : was es anzeigt.' },
-    { q: 'Hypothese : Beweis = Frage : ?', a: ['Antwort', 'Fragezeichen', 'Rätsel', 'Lösung suchen'], l: 5, e: 'Offenes : seine Auflösung.' },
-    { q: 'Chronik : Ereignisse = Inventar : ?', a: ['Bestände', 'Lager', 'Liste', 'Zählung'], l: 5, e: 'Verzeichnis : das, was verzeichnet wird.' },
-    { q: 'Wurzel : Baum = Fundament : ?', a: ['Haus', 'Beton', 'Keller', 'Bauarbeiter'], l: 2, e: 'Tragender Unterbau : Ganzes.' },
-    { q: 'Rad : Fahrrad = Flügel : ?', a: ['Flugzeug', 'Feder', 'fliegen', 'Himmel'], l: 1, e: 'Bauteil : Fahrzeug.' },
   ]);
 
   /* ---------- Wortbedeutung ---------- */

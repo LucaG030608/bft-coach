@@ -50,16 +50,48 @@
       explain: `${same} Paare sind identisch. Tipp: Zeichen für Zeichen von links nach rechts, besonders auf ähnliche Zeichen (0/O, 1/7, 8/B, 5/S) achten.` });
   });
 
-  C.register(A, 'symbole', 'Symbole zuordnen', (L) => {
-    const S = shuffle(['▲', '■', '●', '◆', '★', '✚']);
-    const k = [3, 4, 4, 5, 6][L - 1];
-    const vals = S.slice(0, k).map(() => int(1, L >= 4 ? 12 : 9));
-    const legend = S.slice(0, k).map((s, i) => `<span class="leg">${s} = ${vals[i]}</span>`).join('');
-    const n = [3, 4, 5, 6, 7][L - 1];
-    const seq = []; for (let i = 0; i < n; i++) seq.push(int(0, k - 1));
-    const sum = seq.reduce((t, i) => t + vals[i], 0);
-    return C.mc({ stem: 'Ersetze die Symbole durch ihre Werte und addiere.', html: `<div class="legend">${legend}</div><div class="series">${seq.map((i) => S[i]).join(' + ')} = ?</div>`,
-      correct: sum, distractors: [sum + vals[0], sum - 1, sum + 2, sum - vals[seq[0]] + vals[(seq[0] + 1) % k]], fmt: (v) => String(v), positive: true,
-      explain: `${seq.map((i) => vals[i]).join(' + ')} = ${sum}.` });
+  /* „Chinesische Zeichen“: Zahlen werden je Aufgabe anderen Schriftzeichen zugeordnet, dann wird gerechnet (60 s je Aufgabe). */
+  const HAN = ['山', '水', '火', '木', '金', '土', '日', '月', '人', '口', '田', '中', '大', '小', '王', '手', '目', '石'];
+  C.register(A, 'symbolrechnen', 'Symbolrechnen („chinesische Zeichen“)', (L) => {
+    const k = [4, 5, 5, 6, 6][L - 1];
+    const sy = shuffle(HAN).slice(0, k);
+    const val = shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9]).slice(0, k);
+    const legend = sy.map((s, i) => `<span class="leg han">${s} = ${val[i]}</span>`).join('');
+    const terms = [3, 3, 4, 4, 5][L - 1];
+    const ops = L <= 2 ? ['+', '−'] : ['+', '−', '·'];
+    const idx = []; for (let i = 0; i < terms; i++) idx.push(int(0, k - 1));
+    const opl = []; for (let i = 1; i < terms; i++) opl.push(pick(ops));
+    // Punkt vor Strich auswerten
+    let vals = [val[idx[0]]], os = [];
+    for (let i = 1; i < terms; i++) { if (opl[i - 1] === '·') vals[vals.length - 1] *= val[idx[i]]; else { os.push(opl[i - 1]); vals.push(val[idx[i]]); } }
+    let res = vals[0]; os.forEach((o, i) => { res = o === '+' ? res + vals[i + 1] : res - vals[i + 1]; });
+    const expr = idx.map((x, i) => (i ? ' ' + opl[i - 1] + ' ' : '') + sy[x]).join('');
+    const plain = idx.map((x, i) => (i ? ' ' + opl[i - 1] + ' ' : '') + val[x]).join('');
+    return C.mc({ stem: 'Setze für jedes Zeichen seine Zahl ein und rechne (Punkt vor Strich).', html: `<div class="legend">${legend}</div><div class="series han">${expr} = ?</div>`,
+      correct: res, distractors: [res + 1, res - 1, res + val[idx[0]], res - 2, res + 2], fmt: (v) => String(v),
+      explain: `${plain} = ${res}.` });
+  }, { weight: 1.5 });
+
+  /* Konzentration: Symbole stehen für Ziffern 0–9 (Schlüssel bleibt 20 Min. gleich), Spalte addieren – unter Zeitdruck, nicht alles schaffbar. */
+  const SYMS = ['▲', '■', '●', '◆', '★', '✚', '♥', '♣', '♠', '☀'];
+  let LEG = null;
+  function legend() {
+    if (!LEG || Date.now() - LEG.t > 20 * 60000) LEG = { t: Date.now(), map: shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) };
+    return LEG.map; // LEG.map[i] = Ziffer von SYMS[i]
+  }
+  C.register(A, 'spalte', 'Symbol-Spalten addieren', (L) => {
+    const map = legend();
+    const n = [3, 3, 4, 4, 5][L - 1];
+    const col = []; for (let i = 0; i < n; i++) col.push(int(0, 9));
+    const sum = col.reduce((s, i) => s + map[i], 0);
+    const leg = SYMS.map((s, i) => `<span class="leg">${s}=${map[i]}</span>`).join('');
+    return C.mc({ stem: 'Addiere die Spalte (Schlüssel oben).', html: `<div class="legend small">${leg}</div><div class="colsum">${col.map((i) => SYMS[i]).join('<br>')}</div>`,
+      correct: sum, distractors: [sum + 1, sum - 1, sum + 2, sum - 2, sum + 10], fmt: (v) => String(v), explain: `${col.map((i) => map[i]).join(' + ')} = ${sum}.` });
+  }, { weight: 1 });
+
+  /* Reaktionstest (nachempfunden): roter Pfeil – Position = Reihe; blauer Pfeil – Richtung = Spalte; 3 s je Signal. */
+  C.register('reaktion', 'pfeile', 'Reaktionstest (Pfeile)', (L, n) => {
+    const stimuli = []; for (let i = 0; i < (n || 20); i++) stimuli.push({ row: int(0, 2), col: int(0, 2) });
+    return { stem: 'Rote Pfeil-POSITION = Reihe, blaue Pfeil-RICHTUNG = Spalte. Tippe das Feld.', kind: 'reaction', stimuli, per: Math.max(2, 3.4 - L * 0.2), explain: '' };
   });
 })(window.CAT);

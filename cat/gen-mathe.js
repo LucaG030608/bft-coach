@@ -145,6 +145,25 @@
       distractors: [A0 * (1 + p / 100), A0 * (1 + 2 * p / 100) + 1, A0 + p], fmt: (x) => C.fmt(x) + ' m²', explain: `(${a * 2} · ${1 + p / 100}) · (${b * 2} · ${1 + p / 100}) = ${C.fmt(A1)} m². Die Fläche wächst um mehr als ${p} %.` });
   });
 
+  // Wurzeln (Quadrat- und Kubikwurzeln, ohne Taschenrechner)
+  C.register(A, 'wurzel', 'Wurzeln & Potenzen', (L) => {
+    if (L <= 2) { const a = int(4, 15); return C.mc({ stem: `Wie viel ist die Quadratwurzel aus ${a * a}?`, correct: a, distractors: [a + 1, a - 1, a * 2, Math.round(a * a / 2)], explain: `${a} · ${a} = ${a * a}.` }); }
+    if (L === 3) { const a = int(2, 7); return C.mc({ stem: `Wie viel ist die dritte Wurzel (Kubikwurzel) aus ${a ** 3}?`, correct: a, distractors: [a + 1, a - 1, a * 3, a * a], explain: `${a} · ${a} · ${a} = ${a ** 3}.` }); }
+    if (L === 4) { const a = int(11, 25), b = int(2, 6); return C.mc({ stem: `Berechne: √${a * a} + ${b}³ = ?`, correct: a + b ** 3, distractors: [a + 3 * b, a * a + b ** 3, a + b * b, a + b ** 3 + 1], explain: `√${a * a} = ${a}; ${b}³ = ${b ** 3}; zusammen ${a + b ** 3}.` }); }
+    const a = pick([0.04, 0.09, 0.16, 0.25, 0.36, 0.49, 0.64, 0.81, 1.44]); const r = Math.round(Math.sqrt(a) * 10) / 10;
+    return C.mc({ stem: `Wie viel ist √${C.fmt(a)}?`, correct: r, distractors: [r / 10, r * 10, a / 2, r + 0.1], explain: `${C.fmt(r)} · ${C.fmt(r)} = ${C.fmt(a)}.` });
+  }, { weight: 0.8 });
+
+  // Rechnen mit Nachkommastellen
+  C.register(A, 'dezimal', 'Rechnen mit Kommazahlen', (L) => {
+    const d = (x) => Math.round(x * 100) / 100;
+    if (L <= 2) { const a = int(11, 99) / 10, b = int(11, 99) / 10; return C.mc({ stem: `${C.fmt(a)} + ${C.fmt(b)} = ?`, correct: d(a + b), distractors: [d(a + b + 1), d(a + b - 0.1), d(a + b + 0.1), d(a + b) * 10], step: 0.1, explain: `Komma unter Komma schreiben: ${C.fmt(d(a + b))}.` }); }
+    if (L === 3) { const a = int(12, 95) / 10, b = int(2, 9); return C.mc({ stem: `${C.fmt(a)} · ${b} = ?`, correct: d(a * b), distractors: [d(a * b * 10), d(a * b / 10), d(a * b + b), d(a * b - 0.1)], step: 0.1, explain: `Erst ohne Komma rechnen (${Math.round(a * 10)} · ${b} = ${Math.round(a * 10) * b}), dann eine Stelle zurück: ${C.fmt(d(a * b))}.` }); }
+    if (L === 4) { const b = pick([0.2, 0.4, 0.5, 0.25]), q = int(3, 40); const a = d(q * b); return C.mc({ stem: `${C.fmt(a)} : ${C.fmt(b)} = ?`, correct: q, distractors: [q * 10, q / 10, d(a * b), q + 1], explain: `Beide Zahlen so erweitern, dass der Teiler ganz wird: ${C.fmt(a)} : ${C.fmt(b)} = ${q}.` }); }
+    const a = int(12, 60) / 10, b = int(2, 9) / 10, c = int(1, 9);
+    return C.mc({ stem: `${C.fmt(a)} · ${C.fmt(b)} + ${c} = ?`, correct: d(a * b + c), distractors: [d(a * (b + c)), d(a * b * 10 + c), d(a * b + c + 0.1), d(a + b + c)], step: 0.1, explain: `Punkt vor Strich: ${C.fmt(a)} · ${C.fmt(b)} = ${C.fmt(d(a * b))}; + ${c} = ${C.fmt(d(a * b + c))}.` });
+  }, { weight: 0.9 });
+
   // Rechenzeichen einsetzen
   C.register(A, 'zeichen', 'Rechenzeichen einsetzen', (L) => {
     const ops = ['+', '−', '·', ':'];

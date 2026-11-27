@@ -13,6 +13,7 @@
     c.laufbahn = c.laufbahn || 'feldwebel';
     c.theta = c.theta || {}; c.n = c.n || {};
     c.hist = c.hist || []; c.days = c.days || {}; c.mist = c.mist || [];
+    if (c.hideClock === undefined) c.hideClock = true;
     return c;
   }
   const save = () => B.save();
@@ -22,14 +23,18 @@
     if (B.S.kc && B.S.kc.date) return B.parseD(B.S.kc.date);
     return B.parseD(B.S.dienst || '2027-04-01');
   }
-  const areasFor = (lb) => LB[lb].sections.map((s) => s[0]);
+  const areasFor = (lb) => [...new Set(LB[lb].sections.map((s) => s.area))];
+  const trainAreas = (lb) => areasFor(lb).filter((a) => a !== 'reaktion');
+  /* Standard-Abschnitt für Einstufung/Kontrolle/Training eines Bereichs */
+  const SECDEF = { sprache: { type: 'rechtschreibung' }, konz: { type: 'symbolrechnen' }, reaktion: { mode: 'block' } };
+  function defSection(a, n) { return Object.assign({ area: a, n, mode: 'item', time: AREAS[a].time }, SECDEF[a] || {}, a === 'reaktion' ? { n: Math.max(12, n * 3) } : {}); }
 
   /* =================== Adaptive Engine (IRT, 3PL vereinfacht) =================== */
   const sig = (x) => 1 / (1 + Math.exp(-x));
   const Phi = (x) => sig(1.702 * x);
   function pCorrect(theta, item) {
     const b = item.level - 3;
-    const c = item.kind === 'mc' ? 1 / item.options.length : 0;
+    const c = item.kind === 'mc' && item.options ? 1 / item.options.length : 0;
     return c + (1 - c) * sig(1.3 * (theta - b));
   }
   function eap(resps, prior) {
@@ -66,7 +71,7 @@
   }
   function weakest(k) {
     const c = st();
-    return areasFor(c.laufbahn).slice().sort((a, b) => (c.theta[a] || 0) - (c.theta[b] || 0)).slice(0, k);
+    return trainAreas(c.laufbahn).slice().sort((a, b) => (c.theta[a] || 0) - (c.theta[b] || 0)).slice(0, k);
   }
   /* Abstimmung mit dem BFT-Plan: harte Einheiten = weniger CAT, keine Simulation */
   function bftLoad(d) {
@@ -125,7 +130,10 @@
     const dm = dueMistakes(d).length;
     return { kind: 'train', n, t: 'Tagestraining', m: n + ' Aufgaben gemischt · Fokus ' + w + (dm ? ' · ' + dm + ' Wiederholungen' : '') + (load === 'hard' ? ' · kürzer: ' + LOADTXT.hard : '') };
   }
-  function simMinutes() { const c = st(); return Math.round(LB[c.laufbahn].sections.reduce((s, [a, n]) => s + n * AREAS[a].time, 0) / 60 * 0.75); }
+  function simMinutes(lb) {
+    const c = st();
+    return Math.round(LB[lb || c.laufbahn].sections.reduce((s, x) => s + (x.mode === 'section' ? x.time : x.mode === 'block' ? x.n * 3 : x.n * x.time * 0.45), 0) / 60);
+  }
   function taskDone(d) {
     const day = st().days[B.iso(d)];
     const t = todayTask(d);
@@ -147,81 +155,108 @@
   }
 
   /* =================== Session =================== */
-  let SES = null, TIMER = null;
+  let SES = null, TIMER = null, RX = null;
   function startSession(kind, opt = {}) {
     const c = st();
-    const secs = [];
+    let secs = [];
     if (kind === 'placement') {
-      areasFor(c.laufbahn).forEach((a) => secs.push({ area: a, n: C.PLACEMENT_PER_AREA }));
-      SES = { kind, title: 'Einstufungstest', feedback: false, timed: true, secs, prior: () => 0 };
+      secs = areasFor(c.laufbahn).map((a) => defSection(a, C.PLACEMENT_PER_AREA));
+      SES = { kind, title: 'Einstufungstest', feedback: false, test: true, secs, prior: () => 0 };
     } else if (kind === 'check') {
-      areasFor(c.laufbahn).forEach((a) => secs.push({ area: a, n: 3 }));
-      SES = { kind, title: 'Kontrolltest', feedback: false, timed: true, secs, prior: (a) => c.theta[a] || 0, before: Object.fromEntries(areasFor(c.laufbahn).map((a) => [a, score(c.theta[a] || 0)])) };
+      secs = areasFor(c.laufbahn).map((a) => defSection(a, 3));
+      SES = { kind, title: 'Kontrolltest', feedback: false, test: true, secs, prior: (a) => c.theta[a] || 0, before: Object.fromEntries(areasFor(c.laufbahn).map((a) => [a, score(c.theta[a] || 0)])) };
     } else if (kind === 'sim') {
-      LB[c.laufbahn].sections.forEach(([a, n]) => secs.push({ area: a, n }));
-      SES = { kind, title: 'Prüfungssimulation', feedback: false, timed: true, secs, prior: (a) => (c.theta[a] || 0) * 0.5 };
+      secs = LB[c.laufbahn].sections.map((x) => Object.assign({}, x));
+      SES = { kind, title: 'Simulation · ' + LB[c.laufbahn].short, feedback: false, test: true, secs, prior: (a) => (c.theta[a] || 0) * 0.5 };
     } else if (kind === 'area') {
-      secs.push({ area: opt.area, n: opt.n || 15, type: opt.type });
-      SES = { kind, title: 'Training · ' + AREAS[opt.area].name, feedback: true, timed: c.timed !== false, secs };
+      const sec = defSection(opt.area, opt.n || 15);
+      if (opt.area === 'reaktion') sec.n = 20;
+      if (opt.area === 'technik' || opt.area === 'sprache' || opt.area === 'konz') delete sec.type; // im Training alle Aufgabentypen
+      secs = [sec];
+      SES = { kind, title: 'Training · ' + AREAS[opt.area].name, feedback: true, secs };
     } else if (kind === 'mist') {
       const due = dueMistakes(B.today0());
       if (!due.length) { B.toast('Keine fälligen Wiederholungen.'); return; }
-      secs.push({ area: 'mist', n: Math.min(due.length, 20) });
-      SES = { kind, title: 'Fehler wiederholen', feedback: true, timed: c.timed !== false, secs, mistQ: due.slice() };
+      secs = [{ area: 'mist', n: Math.min(due.length, 20), mode: 'item' }];
+      SES = { kind, title: 'Fehler wiederholen', feedback: true, secs, mistQ: due.slice() };
     } else {
-      secs.push({ area: 'mix', n: opt.n || 25 });
-      SES = { kind: 'train', title: opt.easy ? 'Lockere Wiederholung' : 'Tagestraining', feedback: true, timed: c.timed !== false, secs, easy: !!opt.easy,
+      secs = [{ area: 'mix', n: opt.n || 25, mode: 'item' }];
+      SES = { kind: 'train', title: opt.easy ? 'Lockere Wiederholung' : 'Tagestraining', feedback: true, secs, easy: !!opt.easy,
         mistQ: dueMistakes(B.today0()).slice(0, Math.round((opt.n || 25) * 0.3)) };
     }
-    Object.assign(SES, { secIdx: 0, inSec: 0, resp: [], started: Date.now(), lastType: null, intro: SES.kind === 'placement' || SES.kind === 'sim' });
+    SES.timed = SES.test || c.timed !== false;
+    SES.hideClock = SES.test && c.hideClock !== false;
+    Object.assign(SES, { secIdx: 0, inSec: 0, resp: [], started: Date.now(), lastType: null, intro: SES.test });
     $('sessModal').classList.remove('hidden');
     B.wake(true);
-    if (SES.intro) drawIntro(); else nextItem();
+    if (SES.intro) drawIntro(); else beginSection();
+  }
+  const curSec = () => SES.secs[SES.secIdx];
+  function beginSection() {
+    const sec = curSec();
+    SES.inSec = 0; SES.secStart = Date.now();
+    if (sec.mode === 'block') return runReaction(sec);
+    nextItem();
   }
   function pickMixArea() {
     const c = st();
-    const r = Math.random(), w = weakest(2), all = areasFor(c.laufbahn);
+    const r = Math.random(), w = weakest(2), all = trainAreas(c.laufbahn);
     if (r < 0.4) return w[0];
     if (r < 0.6) return w[1] || w[0];
     return all[Math.floor(Math.random() * all.length)];
   }
   function nextItem() {
-    const sec = SES.secs[SES.secIdx];
+    const sec = curSec();
     let item = null, area = sec.area, mist = null;
     if (SES.mistQ && SES.mistQ.length && (sec.area === 'mist' || (sec.area === 'mix' && Math.random() < 0.35))) {
       mist = SES.mistQ.shift(); item = JSON.parse(JSON.stringify(mist.item)); area = item.area;
     }
     if (!item) {
-      if (area === 'mix') { area = pickMixArea(); }
-      let theta;
-      if (SES.kind === 'placement' || SES.kind === 'sim' || SES.kind === 'check') {
-        const rs = SES.resp.filter((r) => r.area === area);
-        theta = eap(rs, SES.prior(area));
-      } else theta = st().theta[area] || 0;
-      if (SES.easy) theta -= 1;
+      if (area === 'mix') area = pickMixArea();
+      let level;
+      if (sec.adaptive === false) level = Math.min(5, 1 + Math.floor(SES.inSec / sec.n * 5)); // klassisch: steigende Schwierigkeit
+      else {
+        let theta;
+        if (SES.test) theta = eap(SES.resp.filter((r) => r.area === area), SES.prior(area));
+        else theta = st().theta[area] || 0;
+        if (SES.easy) theta -= 1;
+        level = levelFor(theta, SES.kind === 'sim' ? 0.3 : 0.8);
+      }
       // Interleaving: nicht zweimal derselbe Aufgabentyp hintereinander
       for (let t = 0; t < 4; t++) {
-        item = C.generate(area, levelFor(theta, SES.kind === 'sim' ? 0.3 : 0.8), sec.type);
+        item = C.generate(area, level, sec.type);
         if (!item || sec.type || item.type !== SES.lastType) break;
       }
     }
     SES.cur = item; SES.curMist = mist; SES.sel = item.kind === 'mark' ? [] : null; SES.answered = false;
     SES.lastType = item.type;
-    SES.t0 = Date.now(); SES.limit = (AREAS[item.area] || { time: 45 }).time * (item.kind === 'mark' ? 0.8 : 1);
+    SES.t0 = Date.now();
+    SES.limit = sec.mode === 'section' ? null : (sec.area === 'mix' || sec.area === 'mist' ? AREAS[item.area].time : (sec.time || AREAS[item.area].time));
     drawItem();
     clearInterval(TIMER);
     if (SES.timed) TIMER = setInterval(tick, 250);
   }
+  function timeLeft() {
+    const sec = curSec();
+    if (sec.mode === 'section') return sec.time - (Date.now() - SES.secStart) / 1000;
+    return SES.limit - (Date.now() - SES.t0) / 1000;
+  }
   function tick() {
-    if (!SES || SES.answered) return;
-    const left = SES.limit - (Date.now() - SES.t0) / 1000;
+    if (!SES || RX) return;
+    const sec = curSec();
+    if (SES.answered && sec.mode !== 'section') return;
+    const left = timeLeft(), total = sec.mode === 'section' ? sec.time : SES.limit;
     const bar = $('cTbar'), txt = $('cTtxt');
-    if (bar) { bar.style.width = Math.max(0, left / SES.limit * 100) + '%'; bar.parentNode.classList.toggle('over', left < 10); }
+    if (bar) { bar.style.width = Math.max(0, left / total * 100) + '%'; bar.parentNode.classList.toggle('over', left < 10); }
     if (txt) txt.textContent = B.mmss(Math.max(0, left));
-    if (left <= 0) { clearInterval(TIMER); submit(true); }
+    if (left <= 0) {
+      clearInterval(TIMER);
+      if (sec.mode === 'section') { if (!SES.answered) record(true, false); nextSection(); }
+      else submit(true);
+    }
   }
   function sectionLabel() {
-    const sec = SES.secs[SES.secIdx];
+    const sec = curSec();
     if (SES.secs.length > 1) return 'Teil ' + (SES.secIdx + 1) + '/' + SES.secs.length + ' · ' + AREAS[sec.area].name;
     return SES.title;
   }
@@ -229,40 +264,53 @@
     return '<div class="shead"><button class="pill" id="cQuit">Beenden</button><div class="sc"><div class="st">' + B.esc(SES.title) + '</div><div class="muted small">' + sub + '</div></div><span style="width:74px"></span></div>';
   }
   function bindQuit() {
-    $('cQuit').onclick = () => B.confirmDlg('Abbrechen?', ['sim', 'placement', 'check'].includes(SES.kind) ? 'Der Test wird nicht gewertet. Bereits beantwortete Aufgaben fließen trotzdem in deinen Stand ein.' : 'Dein Fortschritt bis hierhin wird gespeichert.', 'Beenden', () => { endSession(true); }, true);
+    $('cQuit').onclick = () => B.confirmDlg('Abbrechen?', SES.test ? 'Der Test wird nicht gewertet. Bereits beantwortete Aufgaben fließen trotzdem in deinen Stand ein.' : 'Dein Fortschritt bis hierhin wird gespeichert.', 'Beenden', () => { endSession(true); }, true);
+  }
+  function secTimeText(sec) {
+    if (sec.mode === 'block') return '3 s je Signal';
+    if (sec.mode === 'section') return B.mmss(sec.time) + ' Min. für den Teil';
+    return (sec.time >= 120 ? 'bis ' + Math.round(sec.time / 60) + ' Min.' : sec.time + ' s') + ' je Aufgabe';
   }
   function drawIntro() {
-    const sec = SES.secs[SES.secIdx], a = AREAS[sec.area];
+    const sec = curSec(), a = AREAS[sec.area];
     let h = head(sectionLabel());
     h += '<div class="cat-intro"><div class="muted small">Teil ' + (SES.secIdx + 1) + ' von ' + SES.secs.length + '</div><h2>' + B.esc(a.name) + '</h2><p>' + B.esc(a.intro) + '</p>';
-    h += '<div class="card pad"><div class="grid2">' + B.stat('Aufgaben', sec.n) + B.stat('Zeit je Aufgabe', a.time + ' s') + '</div>';
-    h += '<ul class="tips small"><li>Kein Zurückblättern – jede Antwort ist endgültig.</li><li>Läuft die Zeit ab, gilt die Aufgabe als falsch. Lieber begründet raten.</li><li>Die Schwierigkeit passt sich deinen Antworten an.</li><li>Kein Taschenrechner – nimm Stift und Papier.</li></ul></div>';
-    h += '<div class="btnrow"><button class="btn" id="cGo">Teil starten</button></div></div>';
+    h += '<div class="card pad"><div class="grid2">' + B.stat(sec.mode === 'block' ? 'Signale' : sec.mode === 'section' ? 'Aufgaben (max.)' : 'Aufgaben', sec.n) + B.stat('Zeit', secTimeText(sec)) + '</div>';
+    h += '<ul class="tips small"><li>Kein Zurückblättern – jede Antwort ist endgültig.</li>';
+    if (sec.mode === 'section') h += '<li>Die Zeit gilt für den ganzen Teil. Läuft sie ab, endet der Teil – man muss nicht alles schaffen.</li>';
+    else if (sec.mode !== 'block') h += '<li>Läuft die Zeit ab, geht es weiter und die Aufgabe zählt als falsch.</li>';
+    if (SES.hideClock && sec.mode !== 'block') h += '<li>Die Uhr ist verborgen – wie im echten CAT. Zeit selbst einteilen.</li>';
+    if (sec.penalty) h += '<li><b>Ratekorrektur:</b> Jede falsche Antwort zieht ⅓ Punkt ab. Bei völliger Unsicherheit lieber „Überspringen“.</li>';
+    else if (sec.adaptive !== false && sec.mode !== 'block') h += '<li>Die Schwierigkeit passt sich deinen Antworten an.</li>';
+    if (['mathe', 'konz'].includes(sec.area)) h += '<li>Kein Taschenrechner – Stift und Papier sind erlaubt.</li>';
+    h += '</ul></div><div class="btnrow"><button class="btn" id="cGo">Teil starten</button></div></div>';
     $('sessSheet').innerHTML = h; bindQuit();
-    $('cGo').onclick = () => nextItem();
+    $('cGo').onclick = () => beginSection();
   }
   const LETTERS = 'ABCDEFGH';
   function drawItem() {
-    const it = SES.cur, sec = SES.secs[SES.secIdx];
-    let h = head(sectionLabel() + ' · Aufgabe ' + (SES.inSec + 1) + '/' + sec.n);
-    if (SES.timed) h += '<div class="cat-timer"><div class="bar"><div id="cTbar" style="width:100%"></div></div><span id="cTtxt">' + B.mmss(SES.limit) + '</span></div>';
+    const it = SES.cur, sec = curSec();
+    let h = head(sectionLabel() + ' · Aufgabe ' + (SES.inSec + 1) + (sec.mode === 'section' ? '' : '/' + sec.n));
+    if (SES.timed && !SES.hideClock) h += '<div class="cat-timer"><div class="bar"><div id="cTbar" style="width:100%"></div></div><span id="cTtxt">' + B.mmss(Math.max(0, timeLeft())) + '</span></div>';
+    else if (SES.timed) h += '<div class="muted small" style="margin:0 0 8px">Zeit läuft · Uhr verborgen</div>';
     h += '<div class="cat-q"><div class="cat-tag">' + B.esc((AREAS[it.area] || {}).name || '') + (SES.curMist ? ' · Wiederholung' : '') + '</div>';
     h += '<div class="cat-stem">' + B.esc(it.stem) + '</div>' + (it.html ? '<div class="cat-fig">' + it.html + '</div>' : '');
     if (it.kind === 'mc') {
       const g = !!it.optionHtml;
-      h += '<div class="cat-opts' + (g ? ' g' : '') + '">' + it.options.map((o, i) => '<button class="cat-opt" data-i="' + i + '"><span class="L">' + LETTERS[i] + '</span><span class="O">' + (g ? it.optionHtml[i] : B.esc(o)) + '</span></button>').join('') + '</div>';
+      h += '<div class="cat-opts' + (g ? (it.options.length > 4 ? ' g g8' : ' g') : '') + '">' + it.options.map((o, i) => '<button class="cat-opt" data-i="' + i + '"><span class="L">' + LETTERS[i] + '</span><span class="O">' + (g ? it.optionHtml[i] : B.esc(o)) + '</span></button>').join('') + '</div>';
     } else if (it.kind === 'input') {
       h += '<div class="inline" style="margin-top:12px"><input id="cIn" inputmode="numeric" autocomplete="off" placeholder="Deine Antwort"></div>';
     } else if (it.kind === 'mark') {
       h += '<div class="cat-mark">' + it.cells.map((ch, i) => '<button data-m="' + i + '">' + B.esc(ch) + '</button>').join('') + '</div>';
     }
-    h += '<div id="cFb"></div><div class="btnrow" style="margin-bottom:30px"><button class="btn" id="cNext" ' + (it.kind === 'mc' ? 'disabled' : '') + '>' + (SES.feedback ? 'Antwort prüfen' : 'Weiter') + '</button></div></div>';
+    h += '<div id="cFb"></div><div class="btnrow" style="margin-bottom:30px">' + (sec.penalty && !SES.feedback ? '<button class="btn2" id="cSkip">Überspringen</button>' : '') + '<button class="btn" id="cNext" ' + (it.kind === 'mc' ? 'disabled' : '') + '>' + (SES.feedback ? 'Antwort prüfen' : 'Weiter') + '</button></div></div>';
     $('sessSheet').innerHTML = h; bindQuit();
     $('sessSheet').scrollTop = 0;
     document.querySelectorAll('.cat-opt').forEach((b) => { b.onclick = () => { if (SES.answered) return; SES.sel = +b.dataset.i; document.querySelectorAll('.cat-opt').forEach((x) => x.classList.toggle('on', x === b)); $('cNext').disabled = false; }; });
     document.querySelectorAll('.cat-mark button').forEach((b) => { b.onclick = () => { if (SES.answered) return; const i = +b.dataset.m; const k = SES.sel.indexOf(i); if (k >= 0) SES.sel.splice(k, 1); else SES.sel.push(i); b.classList.toggle('on'); }; });
     const inp = $('cIn'); if (inp) { inp.oninput = () => { SES.sel = inp.value.trim(); }; inp.onkeydown = (e) => { if (e.key === 'Enter') submit(false); }; setTimeout(() => inp.focus(), 50); }
     $('cNext').onclick = () => { if (SES.answered) advance(); else submit(false); };
+    const sk = $('cSkip'); if (sk) sk.onclick = () => { if (!SES.answered) submit(false, true); };
   }
   function isCorrect(it, sel) {
     if (sel === null || sel === undefined || sel === '') return false;
@@ -276,16 +324,14 @@
     if (it.kind === 'input') return String(it.answer);
     return '';
   }
-  function submit(timeout) {
-    if (SES.answered) return;
-    clearInterval(TIMER);
-    const it = SES.cur, ok = isCorrect(it, SES.sel);
+  /* Antwort speichern (Stand, Fehlerkartei, Tageszähler) */
+  function record(timeout, skipped) {
+    const it = SES.cur, ok = !skipped && isCorrect(it, SES.sel);
     SES.answered = true;
     const secs = (Date.now() - SES.t0) / 1000;
-    SES.resp.push({ area: it.area, type: it.type, item: { level: it.level, kind: it.kind, options: it.options }, ok, sec: secs, timeout });
+    SES.resp.push({ area: it.area, type: it.type, sec_i: SES.secIdx, item: { level: it.level, kind: it.kind, options: it.options }, ok, sec: secs, timeout, skipped: !!skipped, wrong: !ok && !skipped && !timeout });
     eloUpdate(it.area, it, ok);
     const c = st();
-    // Leitner-Wiederholung für Fehler
     if (SES.curMist) {
       const m = c.mist.find((x) => x.id === SES.curMist.id);
       if (m) { if (ok) { m.box++; if (m.box >= 5) c.mist = c.mist.filter((x) => x !== m); else m.due = B.iso(B.addDays(B.today0(), [1, 3, 7, 14, 28][m.box])); } else { m.box = 0; m.due = B.iso(B.addDays(B.today0(), 1)); } }
@@ -296,8 +342,15 @@
     const day = c.days[B.iso(B.today0())] = c.days[B.iso(B.today0())] || { n: 0, ok: 0 };
     day.n++; if (ok) day.ok++;
     save();
+    return { ok, secs };
+  }
+  function submit(timeout, skipped) {
+    if (SES.answered) return;
+    if (curSec().mode !== 'section') clearInterval(TIMER);
+    const it = SES.cur;
+    const { ok, secs } = record(timeout, skipped);
     if (!SES.feedback) { advance(); return; }
-    // Feedback anzeigen
+    clearInterval(TIMER);
     if (it.kind === 'mc') document.querySelectorAll('.cat-opt').forEach((b) => { const i = +b.dataset.i; if (i === it.answer) b.classList.add('ok'); else if (i === SES.sel) b.classList.add('bad'); });
     if (it.kind === 'mark') document.querySelectorAll('.cat-mark button').forEach((b) => { const i = +b.dataset.m; if (it.answer.includes(i)) b.classList.add('ok'); else if (SES.sel.includes(i)) b.classList.add('bad'); });
     const tm = timeout ? 'Zeit abgelaufen. ' : '';
@@ -305,18 +358,107 @@
     $('cNext').textContent = 'Weiter'; $('cNext').disabled = false;
   }
   function advance() {
-    const sec = SES.secs[SES.secIdx];
     SES.inSec++;
-    if (SES.inSec >= sec.n) {
-      SES.secIdx++; SES.inSec = 0;
-      if (SES.secIdx >= SES.secs.length) return finish();
-      if (SES.intro) return drawIntro();
-    }
+    if (SES.inSec >= curSec().n) return nextSection();
     nextItem();
   }
-  function endSession(aborted) {
+  function nextSection() {
     clearInterval(TIMER);
-    if (aborted && SES && SES.resp.length && !['placement', 'sim', 'check'].includes(SES.kind)) { finish(); return; }
+    SES.secIdx++; SES.inSec = 0;
+    if (SES.secIdx >= SES.secs.length) return finish();
+    if (SES.intro) return drawIntro();
+    beginSection();
+  }
+
+  /* ---------- Reaktionstest ---------- */
+  const ARROW = { 0: '←', 1: '↑', 2: '→' };
+  function runReaction(sec) {
+    const item = C.gens.reaktion[0].gen(3, sec.n);
+    const per = item.per * 1000;
+    let h = head(sectionLabel());
+    h += '<div class="cat-q"><div class="cat-tag">Reaktion</div><div class="cat-stem small">Roter Pfeil: <b>Position</b> → Reihe (oben / Mitte / unten). Blauer Pfeil: <b>Richtung</b> → Spalte (← links, ↑ Mitte, → rechts).</div>';
+    h += '<div class="rx-stim" id="rxStim"><div class="muted">Bereit? ' + sec.n + ' Signale, je ' + item.per.toFixed(1).replace('.', ',') + ' s.</div></div>';
+    h += '<div class="rx-grid">' + [0, 1, 2].map((r) => [0, 1, 2].map((c) => '<button data-r="' + r + '" data-c="' + c + '"></button>').join('')).join('') + '</div>';
+    h += '<div class="btnrow"><button class="btn" id="rxGo">Start</button></div><div class="muted small center" id="rxCnt"></div></div>';
+    $('sessSheet').innerHTML = h; bindQuit();
+    const res = [];
+    const stim = $('rxStim');
+    function show(i) {
+      if (!SES || !RX) return;
+      if (i >= item.stimuli.length) return doneRx();
+      const s = item.stimuli[i];
+      RX.i = i; RX.t0 = Date.now(); RX.hit = null;
+      const y = [16, 58, 100][s.row];
+      stim.innerHTML = `<svg viewBox="0 0 220 120" width="220" height="120"><text x="40" y="${y + 12}" font-size="34" fill="#c0392b" text-anchor="middle">➜</text><text x="140" y="74" font-size="52" fill="#2563eb" text-anchor="middle">${ARROW[s.col]}</text></svg>`;
+      $('rxCnt').textContent = (i + 1) + ' / ' + item.stimuli.length;
+      RX.to = setTimeout(() => { res.push({ ok: !!(RX.hit && RX.hit.ok), rt: RX.hit ? RX.hit.rt : null }); show(i + 1); }, per);
+    }
+    function doneRx() {
+      clearTimeout(RX && RX.to); RX = null;
+      const c = st();
+      res.forEach((r) => {
+        SES.resp.push({ area: 'reaktion', type: 'pfeile', sec_i: SES.secIdx, item: { level: 3, kind: 'speed' }, ok: r.ok, sec: r.rt || item.per, timeout: r.rt === null });
+        eloUpdate('reaktion', { level: 3, kind: 'speed' }, r.ok);
+      });
+      const day = c.days[B.iso(B.today0())] = c.days[B.iso(B.today0())] || { n: 0, ok: 0 };
+      day.n += 1; save();
+      if (!SES.feedback) return nextSection();
+      const okN = res.filter((r) => r.ok).length, rts = res.filter((r) => r.ok).map((r) => r.rt);
+      const avg = rts.length ? Math.round(rts.reduce((a, b) => a + b, 0) / rts.length) : null;
+      stim.innerHTML = '<div><b>' + okN + ' von ' + res.length + ' richtig</b>' + (avg ? ' · Ø ' + avg + ' ms' : '') + '</div>';
+      $('rxGo').textContent = 'Weiter'; $('rxGo').style.display = ''; $('rxGo').onclick = () => nextSection();
+    }
+    document.querySelectorAll('.rx-grid button').forEach((b) => {
+      b.onclick = () => {
+        if (!RX || RX.hit) return;
+        const s = item.stimuli[RX.i];
+        RX.hit = { ok: +b.dataset.r === s.row && +b.dataset.c === s.col, rt: Date.now() - RX.t0 };
+        b.classList.add(RX.hit.ok ? 'ok' : 'bad'); setTimeout(() => b.classList.remove('ok', 'bad'), 250);
+      };
+    });
+    $('rxGo').onclick = () => { $('rxGo').style.display = 'none'; RX = {}; show(0); };
+  }
+
+  /* ---------- Persönlichkeitsteil (ohne Wertung) ---------- */
+  const PERS = [
+    'Ich übernehme gern Verantwortung in einer Gruppe.', 'Wenn es stressig wird, verliere ich schnell den Überblick.', 'Ich halte mich an Regeln, auch wenn niemand hinsieht.',
+    'Ich arbeite lieber allein als im Team.', 'Kritik nehme ich mir lange zu Herzen.', 'Ich bringe Aufgaben zu Ende, auch wenn sie mir keinen Spaß machen.',
+    'Ich habe schon einmal etwas mitgenommen, das mir nicht gehörte.', 'Unter Druck treffe ich ruhig Entscheidungen.', 'In einer Gruppe halte ich mich lieber im Hintergrund.',
+    'Ich komme gut mit wenig Schlaf aus.', 'Ich ärgere mich leicht über andere.', 'Ich habe noch nie gelogen.',
+    'Feste Tagesabläufe geben mir Halt.', 'Ich trinke regelmäßig Alkohol, um zu entspannen.', 'Ich arbeite gern mit Menschen zusammen, die anders sind als ich.',
+    'Es fällt mir schwer, Befehle zu befolgen, die ich nicht verstehe.', 'Ich bleibe auch bei Rückschlägen dran.', 'Ich bin gern der Mittelpunkt in einer Gruppe.',
+    'Bei Stress verliere ich selten den Überblick.', 'Regeln sind für mich eher Empfehlungen.', 'Ich arbeite gern im Team.',
+    'Ich lasse Aufgaben oft liegen, wenn sie langweilig werden.', 'Ich kann gut mit Kritik umgehen.', 'Ich bin immer pünktlich.',
+  ];
+  const PERS_PAIRS = [[1, 18], [2, 19], [3, 20], [5, 21], [4, 22]]; // jeweils gegensätzlich formuliert → konsistent, wenn verschieden beantwortet
+  function startPers() {
+    SES = { kind: 'pers', title: 'Persönlichkeitsteil', i: 0, ans: [] };
+    $('sessModal').classList.remove('hidden');
+    const draw = () => {
+      if (SES.i >= PERS.length) return persDone();
+      let h = head('Aussage ' + (SES.i + 1) + '/' + PERS.length);
+      h += '<div class="cat-q"><div class="cat-tag">Kein richtig oder falsch · ehrlich und spontan antworten</div><div class="cat-stem" style="margin:24px 0">' + B.esc(PERS[SES.i]) + '</div>';
+      h += '<div class="btnrow"><button class="btn2" data-a="1">trifft zu</button><button class="btn2" data-a="0">trifft nicht zu</button></div></div>';
+      $('sessSheet').innerHTML = h; bindQuit();
+      document.querySelectorAll('[data-a]').forEach((b) => { b.onclick = () => { SES.ans[SES.i] = +b.dataset.a; SES.i++; draw(); }; });
+    };
+    draw();
+  }
+  function persDone() {
+    const inc = PERS_PAIRS.filter(([a, b]) => SES.ans[a] === SES.ans[b]);
+    const c = st(); c.hist.push({ date: B.iso(B.today0()), kind: 'pers', ok: PERS_PAIRS.length - inc.length, n: PERS_PAIRS.length, overall: null }); save();
+    let h = '<div class="shead"><span style="width:74px"></span><div class="sc"><div class="st">Persönlichkeitsteil</div><div class="muted small">Rückblick</div></div><span style="width:74px"></span></div>';
+    h += '<div class="card pad"><p>Im echten CAT wird dieser Teil <b>nicht mit Punkten bewertet</b>. Die Antworten werden im Gespräch mit Psychologin bzw. Prüfoffizier aufgegriffen. Es gibt verneinte und umformulierte Wiederholungen.</p>';
+    h += '<div class="fb ' + (inc.length ? 'warn' : 'ok') + '">' + (inc.length ? inc.length + ' widersprüchliche Antwortpaare – im Gespräch könntest du darauf angesprochen werden:' : 'Deine Antworten sind in sich stimmig.') + '</div>';
+    inc.forEach(([a, b]) => { h += '<div class="muted small" style="margin-top:8px">„' + B.esc(PERS[a]) + '“ und „' + B.esc(PERS[b]) + '“ – beide „' + (SES.ans[a] ? 'trifft zu' : 'trifft nicht zu') + '“.</div>'; });
+    h += '<ul class="tips small" style="margin-top:12px"><li>Ehrlich antworten – nicht „taktisch“. Extreme Aussagen („noch nie gelogen“) wirken unglaubwürdig.</li><li>Genau lesen, auf Verneinungen achten.</li></ul></div>';
+    h += '<div class="btnrow" style="margin-bottom:30px"><button class="btn" id="cDone">Fertig</button></div>';
+    $('sessSheet').innerHTML = h; $('cDone').onclick = () => { SES = null; B.closeSess(); };
+  }
+
+  function endSession(aborted) {
+    clearInterval(TIMER); if (RX) { clearTimeout(RX.to); RX = null; }
+    if (aborted && SES && SES.resp && SES.resp.length && !SES.test) { finish(); return; }
     SES = null; B.closeSess();
   }
   function finish() {
@@ -327,12 +469,20 @@
     areas.forEach((a) => {
       const rs = resp.filter((r) => r.area === a);
       const th = eap(rs, SES.kind === 'placement' ? 0 : (SES.prior ? SES.prior(a) : (c.theta[a] || 0)));
-      res[a] = { score: score(th), ok: rs.filter((r) => r.ok).length, n: rs.length, theta: th, slow: rs.filter((r) => r.timeout).length };
+      res[a] = { score: score(th), ok: rs.filter((r) => r.ok).length, n: rs.length, theta: th, slow: rs.filter((r) => r.timeout && a !== 'reaktion').length };
       if (SES.kind === 'placement') { c.theta[a] = th; c.n[a] = Math.max(c.n[a] || 0, 6); }
-      if (SES.kind === 'check') { c.theta[a] = 0.5 * (c.theta[a] || 0) + 0.5 * th; res[a].score = score(c.theta[a]); res[a].delta = res[a].score - SES.before[a]; }
+      if (SES.kind === 'check') { c.theta[a] = 0.5 * (c.theta[a] || 0) + 0.5 * th; res[a].score = score(c.theta[a]); res[a].delta = res[a].score - (SES.before[a] || 0); }
+    });
+    // Ratekorrektur-Teile
+    const pen = [];
+    SES.secs.forEach((s, i) => {
+      if (!s.penalty) return;
+      const rs = resp.filter((r) => r.sec_i === i);
+      const r = rs.filter((x) => x.ok).length, w = rs.filter((x) => x.wrong).length, sk = rs.filter((x) => x.skipped).length;
+      pen.push({ name: AREAS[s.area].name, r, w, sk, n: rs.length, pts: Math.round((r - w / 3) * 10) / 10 });
     });
     const ok = resp.filter((r) => r.ok).length;
-    const isTest = SES.kind === 'placement' || SES.kind === 'sim' || SES.kind === 'check';
+    const isTest = !!SES.test;
     const overall = isTest && areas.length ? Math.round(areas.reduce((s, a) => s + res[a].score, 0) / areas.length) : null;
     c.hist.push({ date: today, kind: SES.kind, ok, n: resp.length, overall, areas: Object.fromEntries(areas.map((a) => [a, res[a].score])), min: Math.round((Date.now() - SES.started) / 60000) });
     if (SES.kind === 'placement') c.placed = today;
@@ -350,11 +500,12 @@
     });
     h += '</div>';
     const fb = [];
+    pen.forEach((p) => fb.push({ c: 'info', t: p.name + ' mit Ratekorrektur: ' + String(p.pts).replace('.', ',') + ' Punkte (' + p.r + ' richtig, ' + p.w + ' falsch, ' + p.sk + ' übersprungen).' }));
     if (isTest) {
       const weak = areas.filter((a) => res[a].score < target).sort((x, y) => res[x].score - res[y].score);
       if (weak.length) fb.push({ c: 'warn', t: 'Unter dem Orientierungsziel: ' + weak.map((a) => AREAS[a].name).join(', ') + '. Das Tagestraining setzt dort den Schwerpunkt.' });
       else fb.push({ c: 'ok', t: 'Alle Bereiche über dem Orientierungsziel. Weiter so – Routine und Tempo halten.' });
-      const slow = resp.filter((r) => r.timeout).length;
+      const slow = resp.filter((r) => r.timeout && r.area !== 'reaktion').length;
       if (slow >= 3) fb.push({ c: 'warn', t: slow + '× ist die Zeit abgelaufen. Bei schweren Aufgaben früher begründet raten und weitergehen.' });
     }
     fb.push({ c: 'info', t: 'Falsch beantwortete Aufgaben kommen nach 1, 3, 7, 14 und 28 Tagen als Wiederholung zurück.' });
@@ -413,28 +564,29 @@
     // Üben
     const dm = dueMistakes(t).length;
     h += '<div class="sec">Üben</div><div class="card">';
-    h += '<div class="row tap" id="cSim"><div class="ic">' + ICON.exam + '</div><div class="tx"><div class="t">Prüfungssimulation</div><div class="m">Wie im Karrierecenter: adaptiv, Zeitlimit, kein Zurück · ca. ' + simMinutes() + ' Min.</div></div><div class="end">' + B.IC.chev + '</div></div>';
+    const simDesc = c.laufbahn === 'offizier' ? 'Analogien, Matrizen, Mathe · je bis 3 Min. pro Aufgabe' : LB[c.laufbahn].sections.length + ' Teile wie im Karrierecenter';
+    h += '<div class="row tap" id="cSim"><div class="ic">' + ICON.exam + '</div><div class="tx"><div class="t">Prüfungssimulation · ' + B.esc(LB[c.laufbahn].short) + '</div><div class="m">' + simDesc + ' · adaptiv, kein Zurück · ca. ' + simMinutes() + ' Min.</div></div><div class="end">' + B.IC.chev + '</div></div>';
     h += '<div class="row tap" id="cPlace"><div class="ic">' + B.IC.target + '</div><div class="tx"><div class="t">' + (c.placed ? 'Einstufungstest wiederholen' : 'Einstufungstest') + '</div><div class="m">' + (c.placed ? 'Zuletzt am ' + B.fmtD(B.parseD(c.placed)) : 'Misst deinen Stand in allen Bereichen') + '</div></div><div class="end">' + B.IC.chev + '</div></div>';
     h += '<div class="row tap" id="cMist"><div class="ic">' + ICON.redo + '</div><div class="tx"><div class="t">Fehler wiederholen</div><div class="m">' + (dm ? dm + ' fällig' : 'Nichts fällig') + ' · ' + c.mist.length + ' im Speicher</div></div><div class="end">' + B.IC.chev + '</div></div>';
+    h += '<div class="row tap" id="cPers"><div class="ic">' + ICON.brain + '</div><div class="tx"><div class="t">Persönlichkeitsteil kennenlernen</div><div class="m">24 Aussagen „trifft zu / nicht zu“ · ohne Wertung</div></div><div class="end">' + B.IC.chev + '</div></div>';
     h += '</div>';
-    h += '<div class="sec">Bereich gezielt trainieren</div><div class="card">';
-    areas.concat(areas.includes('englisch') ? [] : []).forEach((a) => {
-      const types = (C.gens[a] || []).map((g) => g.label).join(', ');
-      h += '<div class="row tap" data-area="' + a + '"><div class="ic">' + ICON.brain + '</div><div class="tx"><div class="t">' + B.esc(AREAS[a].name) + '</div><div class="m">' + B.esc(types) + '</div></div><div class="end">' + B.IC.chev + '</div></div>';
-    });
-    h += '</div>';
+    const row = (a) => '<div class="row tap" data-area="' + a + '"><div class="ic">' + ICON.brain + '</div><div class="tx"><div class="t">' + B.esc(AREAS[a].name) + '</div><div class="m">' + B.esc((C.gens[a] || []).map((g) => g.label).join(', ')) + '</div></div><div class="end">' + B.IC.chev + '</div></div>';
+    h += '<div class="sec">Bereich gezielt trainieren</div><div class="card">' + areas.map(row).join('') + '</div>';
+    const extra = Object.keys(AREAS).filter((a) => !areas.includes(a));
+    h += '<div class="sec">Zusatz <span class="muted small">im echten CAT kaum belegt</span></div><div class="card">' + extra.map(row).join('') + '</div>';
     // Verlauf
     const hist = c.hist.slice(-8).reverse();
     if (hist.length) {
       h += '<div class="sec">Verlauf</div><div class="card">';
-      const nm = { check: 'Kontrolltest', placement: 'Einstufungstest', sim: 'Simulation', train: 'Training', area: 'Bereichstraining', mist: 'Wiederholung' };
+      const nm = { pers: 'Persönlichkeitsteil', check: 'Kontrolltest', placement: 'Einstufungstest', sim: 'Simulation', train: 'Training', area: 'Bereichstraining', mist: 'Wiederholung' };
       hist.forEach((x) => { h += '<div class="row"><div class="tx"><div class="t">' + nm[x.kind] + '</div><div class="m">' + B.fmtD(B.parseD(x.date)) + ' · ' + x.ok + '/' + x.n + ' richtig' + (x.min ? ' · ' + x.min + ' Min.' : '') + '</div></div><div class="end">' + (x.overall != null ? '<b>' + x.overall + '</b>' : '') + '</div></div>'; });
       h += '</div>';
     }
     // Einstellungen
     h += '<div class="sec">Einstellungen CAT</div><div class="card pad"><label>Laufbahn</label><select id="cLb">' + Object.keys(LB).map((k) => '<option value="' + k + '"' + (k === c.laufbahn ? ' selected' : '') + '>' + B.esc(LB[k].name) + '</option>').join('') + '</select>';
     h += '<label>Datum CAT-Test</label><input type="date" id="cDate" value="' + B.iso(T) + '">';
-    h += '<div class="toggle"><span>Zeitlimit im Training</span><input type="checkbox" id="cTimed" ' + (c.timed !== false ? 'checked' : '') + '></div></div>';
+    h += '<div class="toggle"><span>Zeitlimit im Training</span><input type="checkbox" id="cTimed" ' + (c.timed !== false ? 'checked' : '') + '></div>';
+    h += '<div class="toggle"><span>Uhr in Tests verbergen (wie im echten CAT)</span><input type="checkbox" id="cHide" ' + (c.hideClock !== false ? 'checked' : '') + '></div></div>';
     h += '<div class="sec">Wie der Plan funktioniert</div><div class="card pad">' + scienceHtml() + '</div>';
     el.innerHTML = h; B.bindTop(el);
     const tr = $('catToday'); if (tr) tr.onclick = () => startTask(t);
@@ -445,13 +597,15 @@
     $('cLb').onchange = (e) => { c.laufbahn = e.target.value; save(); render(); };
     $('cDate').onchange = (e) => { if (e.target.value) { c.testDate = e.target.value; save(); render(); } };
     $('cTimed').onchange = (e) => { c.timed = e.target.checked; save(); };
+    $('cHide').onchange = (e) => { c.hideClock = e.target.checked; save(); };
+    $('cPers').onclick = () => startPers();
   }
   function scienceHtml() {
     const d = (t, b) => '<details style="border-bottom:1px solid var(--line)"><summary>' + t + '</summary><div class="muted" style="padding-bottom:12px">' + b + '</div></details>';
     return d('Lernmethoden mit Wirkung', '<ul class="tips"><li><b>Üben mit Aufgaben</b> statt Wiederlesen – eine der zwei wirksamsten Lerntechniken (Dunlosky et al. 2013).</li><li><b>Verteilt lernen:</b> täglich kurz statt selten lang; Fehler kommen nach 1, 3, 7, 14, 28 Tagen wieder (Cepeda et al. 2008).</li><li><b>Mischen</b> statt Blöcke: deutlich bessere Testergebnisse, obwohl es sich schwerer anfühlt (Rohrer & Taylor).</li><li><b>Übungseffekt</b> bei Eignungstests ist real, aber moderat – er kommt vor allem aus Vertrautheit mit Aufgabentypen und Testsituation (Hausknecht et al. 2007).</li><li><b>Schlaf</b> über Wochen zählt mehr als die Nacht vor dem Test.</li><li><b>Kontrolltest alle 2 Wochen</b> (Grundlagen- und Aufbauphase): 3 Aufgaben je Bereich, zeigt deinen Fortschritt und passt die Schwerpunkte an.</li></ul>') +
       d('Abstimmung mit dem BFT-Plan', '<ul class="tips"><li>An Tagen mit Intervallen oder Marsch: rund 40 % weniger CAT-Aufgaben.</li><li>Am BFT-Testtag: nur 10 lockere Aufgaben.</li><li>Simulationen und Kontrolltests liegen nie auf harten Trainingstagen. Fällt eine Simulation darauf, rutscht sie auf den nächsten ruhigeren Tag.</li></ul>') +
       d('Phasen bis zum Test', '<ul class="tips">' + PHASES.map((p) => '<li><b>' + p.name + '</b>' + (p.key === 'grund' ? ' (bis ' + p.to + ' Tage vorher)' : ' (' + p.from + '–' + p.to + ' Tage vorher)') + ': ' + p.tip + '</li>').join('') + '</ul>') +
-      d('Wie realistisch ist der Test?', '<ul class="tips"><li>Die echten CAT-Aufgaben sind nicht öffentlich. Hier: selbst erstellte und generierte Aufgaben in denselben Aufgabentypen, Formaten (meist 4 Optionen) und Spielregeln (adaptiv, Zeitlimit, kein Zurück).</li><li>Zeiten, Aufgabenzahlen und Zielwerte sind Schätzungen – die Bundeswehr veröffentlicht keine Grenzwerte.</li><li>Persönlichkeitsfragebogen und Reaktionstests sind nicht enthalten.</li></ul>');
+      d('Wie realistisch ist der Test?', '<ul class="tips"><li>Die echten Aufgaben sind nicht öffentlich. Grundlage hier: offizielle Bundeswehr-Angaben, eine von der Bundeswehr genehmigte Dissertation (2012) mit Beschreibungen der CAT-Subtests, über 20 Erfahrungsberichte (Forum, Videos) und 8 Übungsanbieter (Stand 28.11.2026).</li><li><b>Köln (Offiziere):</b> ca. 30 Aufgaben – Wortanalogien, Matrizen, Mathe – je bis ca. 3 Min.</li><li><b>Karrierecenter:</b> lange Testbatterie mit Rechtschreibung, Technik (Zeit für den ganzen Teil, Ratekorrektur), Reaktion, Symbolrechnen u. a.</li><li>Uhr im echten Test meist nicht sichtbar; Matrizen mit 8, Analogien mit 5 Antworten.</li><li>Genaue Aufgabenzahlen, Zeiten und Grenzwerte veröffentlicht die Bundeswehr nicht – diese Werte sind begründete Schätzungen. Die Reaktionsaufgabe ist nachempfunden.</li><li>Würfel, Figurenreihen, Zahlenreihen und Allgemeinwissen sind im echten CAT kaum belegt und deshalb nur als Zusatz enthalten.</li></ul>');
   }
 
   /* =================== Einbindung =================== */

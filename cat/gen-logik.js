@@ -69,7 +69,7 @@
   const cellKey = (c) => `${c.shape}|${c.count}|${c.fill}|${c.rot || 0}`;
   function cellBox(c, size = 80, extra = '') { return `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" class="cell" ${extra}><rect x="1" y="1" width="${size - 2}" height="${size - 2}" fill="#fff" stroke="#bbb"/>${c ? cellSvg(c, size) : `<text x="${size / 2}" y="${size / 2 + 10}" text-anchor="middle" font-size="30" fill="#555">?</text>`}</svg>`; }
 
-  C.register(A, 'matrix', 'Matrizen', (L) => {
+  C.register('matrizen', 'formen', 'Formen-Matrizen', (L) => {
     const shp = shuffle(SHAPES).slice(0, 3), fl = shuffle(FILLS);
     const latin = () => { const p = shuffle([0, 1, 2]); const sh = pick([1, 2]); return (r, c) => p[(r * sh + c) % 3]; };
     const grid = [];
@@ -94,9 +94,9 @@
     ];
     const seen = new Set([cellKey(ans)]);
     let guard = 0;
-    while (alt.length < 3 && guard++ < 50) {
+    while (alt.length < 7 && guard++ < 200) {
       let d = pick(vary)(ans);
-      if (L >= 4 && chance(0.4)) d = pick(vary)(d);
+      if ((L >= 4 && chance(0.4)) || guard > 15) d = pick(vary)(d);
       if (!seen.has(cellKey(d))) { seen.add(cellKey(d)); alt.push(d); }
     }
     const opts = shuffle([ans, ...alt]);
@@ -106,7 +106,7 @@
       options: opts.map(cellKey), optionHtml: opts.map((c) => cellBox(c, 70)),
       answer: opts.indexOf(ans), explain: 'Regeln: ' + rules.join('; ') + '.',
     };
-  }, { weight: 1.5 });
+  }, { weight: 1 });
 
   /* ---------- Figurenreihen (Pfeil dreht, Punkte zählen) ---------- */
   C.register(A, 'figurenreihe', 'Figurenreihen', (L) => {

@@ -48,3 +48,14 @@
 .cat-lvl{position:relative}
 .cat-lvl i{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);opacity:.55;border-radius:1px}
 svg.cell rect:first-child{fill:var(--cell-bg)}
+.cat-opts.g8{grid-template-columns:repeat(4,1fr);gap:6px}
+.cat-opts.g8 .cat-opt{padding:6px 4px;border-radius:14px}
+.cat-opts.g8 .cat-opt .L{width:22px;height:22px;font-size:12px}
+.han{font-family:"PingFang SC","Hiragino Sans","Noto Sans CJK SC",serif}
+.leg.han{font-size:19px}
+.colsum{font-size:30px;line-height:1.25;text-align:center;margin:6px 0}
+.rx-stim{height:130px;display:flex;align-items:center;justify-content:center;background:#f4f5f2;border-radius:16px;margin:10px 0;color:#141714}
+.rx-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:300px;margin:0 auto}
+.rx-grid button{height:64px;border-radius:14px;background:var(--fill);transition:background .1s}
+.rx-grid button.ok{background:var(--ok)}
+.rx-grid button.bad{background:var(--bad)}
