@@ -343,7 +343,7 @@ var GYM={
    {n:"Dips",t:"bw",sets:3,reps:"8-12"},
    {n:"Face Pulls",t:"w",sets:2,reps:"15"},
    {n:"Klimmhang Untergriff",t:"hold",sets:2,reps:"max",note:"Kammgriff, Kinn über der Stange."}]},
- LB:{title:"Unterkörper B",min:70,name:"Pendellauf-Drills + Unterkörper B",drills:true,ex:[
+ LB:{title:"Unterkörper B",min:55,name:"Unterkörper B",ex:[
    {n:"Seitliche Sprünge",t:"bw",sets:3,reps:"5/Seite",note:"Explosiv, sauber landen."},
    {n:"Trap-Bar-Kreuzheben",t:"w",sets:3,reps:"5"},
    {n:"Bulgarian Split Squats",t:"w",sets:3,reps:"8/Seite"},
@@ -364,7 +364,7 @@ function dayUnits(d){
   if(dow===5 && testFriday(w,d)){ u.push({kind:"test"}); return u; }
   if(dow===5){ var fp=fridayPlan(w,d);
     if(off!==null && off>7 && off<=21 && kcErgo()){ var last=addDays(d,7); u.push({kind:"ergo",plan:{n:(kcOff(last)<=7?2:1)}}); }
-    else u.push({kind:"run",plan:{type:"easy",min:fp.min,focus:"Lockerer Lauf im Plauder-Tempo + 4–6 Steigerungen à 80 m"}}); }
+    else { u.push({kind:"drills"}); u.push({kind:"run",plan:{type:"easy",min:fp.min,focus:"Nach den Pendellauf-Drills: lockerer Lauf im Plauder-Tempo"}}); } }
   if(dow===6) u.push({kind:"gym",key:"LB"});
   if(off===-1) u=u.filter(function(x){ return x.kind!=="interval"; }).map(function(x){ return x.kind==="march"?{kind:"run",plan:{type:"easy",min:30,focus:"Erholung nach dem Sporttest: 30 Min. locker"}}:x; }); // Tag nach dem Test: nichts Hartes
   // Mini-Formspitze 7 Tage vor dem Sporttest (Volumen runter, Intensität bleibt)
@@ -387,6 +387,7 @@ function unitDone(d,unit){
     if(unit.kind==="interval") return l.type==="interval";
     if(unit.kind==="test"||unit.kind==="kc") return l.type==="test";
     if(unit.kind==="ergo") return l.type==="ergo";
+    if(unit.kind==="drills") return l.type==="drills";
     return false; });
 }
 
@@ -397,7 +398,7 @@ function bestOf(field, better){
     var x=null;
     if(l.type==="test") x=l[field];
     if(field==="hang" && l.type==="gym" && l.ex) l.ex.forEach(function(e){ if(e.t==="hold") e.sets.forEach(function(s){ if(s.done&&s.sec) x=Math.max(x||0,s.sec); }); });
-    if(field==="sprint" && l.type==="gym" && l.sprints) l.sprints.forEach(function(s){ x = x==null? s : Math.min(x,s); });
+    if(field==="sprint" && (l.type==="gym"||l.type==="drills") && l.sprints) l.sprints.forEach(function(s){ x = x==null? s : Math.min(x,s); });
     if(x!=null && x>0){ if(v==null || (better==="low"? x<v : x>v)) v=x; }
   }); return v;
 }
@@ -479,6 +480,7 @@ function unitInfo(u){
   if(u.kind==="march") return {ic:IC.pack,t:"Marsch "+u.plan.km+" km",m:String(u.plan.kg).replace(".",",")+" kg Gepäck · 6,0–6,5 km/h"};
   if(u.kind==="run"){ var p=u.plan; if(p.type==="easy") return {ic:IC.run,t:"Lockerer Lauf",m:p.min+" Min. Plauder-Tempo + Steigerungen"}; if(p.type==="long") return {ic:IC.run,t:"Langer Lauf",m:"45–60 Min. locker"}; return {ic:IC.run,t:"Lauf "+p.km+" km",m:"locker, ohne Gepäck"}; }
   if(u.kind==="interval") return {ic:IC.bolt,t:u.plan.label.replace("BFT-spezifisch ","").replace("Taper: ",""),m:"Laufbahn · danach Oberkörper"};
+  if(u.kind==="drills") return {ic:IC.bolt,t:"Pendellauf-Drills",m:"Draußen, zuerst und frisch · ca. 15 Min. · danach der lockere Lauf"};
   if(u.kind==="test") return {ic:IC.target,t:"BFT-Test",m:"Pendellauf, Klimmhang, 1000 m"};
   if(u.kind==="kc") return {ic:IC.target,t:"Sporttest Karrierecenter",m:"Pendellauf, Klimmhang, "+(S.kc&&S.kc.endur==="ergo"?"3000 m Ergometer":S.kc&&S.kc.endur==="lauf"?"1000 m":"1000 m oder Ergometer")};
   if(u.kind==="ergo") return {ic:IC.bolt,t:"Fahrradergometer",m:(S.kc&&S.kc.endur==="ergo"?"":"Falls Ergometer im Test · ")+(u.plan.n===2?"3000 m Probefahrt":"5× 1 Min. hart")+" · Gym-Rad"};
@@ -591,12 +593,13 @@ function renderFort(){
   $("fTest").onclick=function(){ openUnit({kind:"test"}, today0()); };
   Array.prototype.forEach.call(el.querySelectorAll("[data-del]"),function(b){ b.onclick=function(){ var id=b.getAttribute("data-del"); confirmDlg("Eintrag löschen?","Wird dauerhaft entfernt.","Löschen",function(){ S.logs=S.logs.filter(function(l){return l.id!==id;}); save(); render(); },true); }; });
 }
-function logTitle(l){ return l.type==="gym"?(GYM[l.key]?GYM[l.key].title:"Gym"):l.type==="march"?"Marsch":l.type==="run"?"Lauf":l.type==="interval"?"Intervalle":l.type==="test"?(l.kc?"Sporttest Karrierecenter":"BFT-Test"):l.type==="ergo"?"Fahrradergometer":l.type; }
+function logTitle(l){ return l.type==="gym"?(GYM[l.key]?GYM[l.key].title:"Gym"):l.type==="march"?"Marsch":l.type==="run"?"Lauf":l.type==="interval"?"Intervalle":l.type==="test"?(l.kc?"Sporttest Karrierecenter":"BFT-Test"):l.type==="ergo"?"Fahrradergometer":l.type==="drills"?"Pendellauf-Drills":l.type; }
 function logSub(l){
   if(l.type==="march") return f2(l.km)+" km · "+(l.kg||0)+" kg · "+hms(l.sec)+" · "+f1(l.kmh)+" km/h";
   if(l.type==="run") return f2(l.km||0)+" km · "+hms(l.sec)+(l.kmh?" · "+paceStr(l.kmh):"");
   if(l.type==="interval") return (l.reps||[]).map(function(r){ return r.m? mmss(r.sec): mmss(r.sec); }).join(" / ");
   if(l.type==="ergo") return l.sec?"3000 m in "+mmss(l.sec):"Kennenlernen + Intervalle";
+  if(l.type==="drills") return l.sprints&&l.sprints.length?"11×10 m: "+l.sprints.map(function(x){return f1(x);}).join(" / ")+" s":"Drills ohne Zeitmessung";
   if(l.type==="test"&&l.ergo3000) return "Pendel "+(l.sprint?f1(l.sprint)+" s":"–")+" · Hang "+(l.hang?Math.round(l.hang)+" s":"–")+" · Ergo "+mmss(l.ergo3000);
   if(l.type==="test") return "Pendel "+(l.sprint?f1(l.sprint)+" s":"–")+" · Hang "+(l.hang?Math.round(l.hang)+" s":"–")+" · 1000 m "+(l.run1000?mmss(l.run1000):"–");
   if(l.type==="gym"){ var n=0; (l.ex||[]).forEach(function(e){ e.sets.forEach(function(s){ if(s.done) n++; }); }); return n+" Sätze"+(l.sprints&&l.sprints.length?" · Pendel "+l.sprints.map(function(x){return f1(x);}).join("/")+" s":""); }
@@ -642,7 +645,7 @@ function openSettings(){
 }
 function backgroundHtml(){
   function d(t,b){ return '<details style="border-bottom:1px solid var(--line)"><summary>'+t+'</summary><div class="muted" style="padding-bottom:12px">'+b+'</div></details>'; }
-  return d("Warum der Plan so aufgebaut ist",'<ul class="tips"><li>Kraft und Ausdauer vertragen sich: Maximalkraft und Muskelaufbau leiden kaum, nur die Explosivkraft – deshalb Sprünge immer zuerst (Schumann 2022).</li><li>1000 m sind überwiegend aerob – Grundlagenläufe und VO2max-Intervalle sind der Haupthebel (Duffield 2005).</li><li>VO2max-Intervalle: ≥ 2 Min. pro Wiederholung, ≥ 15 Min. hart pro Einheit, über 4–12 Wochen (Wen 2019).</li><li>80/20: ca. 80 % locker, 20 % hart.</li><li>Schweres Krafttraining plus Sprünge macht Läufer schneller (Llanos-Lagos 2024).</li><li>Märsche alle 2 Wochen: 2× pro Monat bringt bei zusätzlichem Lauf- und Krafttraining so viel wie 4× (Knapik) und spart Kraft für den BFT.</li><li>Ab Block 2 zweite Tempoeinheit (200er am Dienstag): mehr Training im 1000-m-Tempo, ohne zusätzlichen Lauftag.</li><li>Formspitze: 2 Wochen, Volumen −40–60 %, Intensität bleibt (Bosquet 2007).</li></ul>')+
+  return d("Warum der Plan so aufgebaut ist",'<ul class="tips"><li>Pendellauf-Drills freitags draußen vor dem lockeren Lauf: Sprint- und Richtungswechsel-Qualität ist am besten in ausgeruhtem Zustand und mit geringem Volumen; 1–2 kurze Einheiten pro Woche reichen. Freitag ist der leichteste Tag, liegt 4 Tage nach dem schweren Beintag (Mo) und zwei Tage nach dem langen Marsch (Mi). In BFT-Testwochen ersetzt der Test die Drills.</li><li>Kraft und Ausdauer vertragen sich: Maximalkraft und Muskelaufbau leiden kaum, nur die Explosivkraft – deshalb Sprünge immer zuerst (Schumann 2022).</li><li>1000 m sind überwiegend aerob – Grundlagenläufe und VO2max-Intervalle sind der Haupthebel (Duffield 2005).</li><li>VO2max-Intervalle: ≥ 2 Min. pro Wiederholung, ≥ 15 Min. hart pro Einheit, über 4–12 Wochen (Wen 2019).</li><li>80/20: ca. 80 % locker, 20 % hart.</li><li>Schweres Krafttraining plus Sprünge macht Läufer schneller (Llanos-Lagos 2024).</li><li>Märsche alle 2 Wochen: 2× pro Monat bringt bei zusätzlichem Lauf- und Krafttraining so viel wie 4× (Knapik) und spart Kraft für den BFT.</li><li>Ab Block 2 zweite Tempoeinheit (200er am Dienstag): mehr Training im 1000-m-Tempo, ohne zusätzlichen Lauftag.</li><li>Formspitze: 2 Wochen, Volumen −40–60 %, Intensität bleibt (Bosquet 2007).</li></ul>')+
    d("Vorbereitung Sporttest Karrierecenter",'<ul class="tips"><li>Datum und Ausdauer-Disziplin trägst du im Zahnrad ein. Der Plan stellt sich automatisch um.</li><li>3 bis 1 Woche vorher: freitags Fahrradergometer (Kennenlernen, dann 3000 m Probefahrt). Auf ungewohnten Geräten verbessert schon wenig Übung Technik und Tempoeinteilung.</li><li>7 Tage vorher Formspitze: halbe Sätze, kein Marsch, Intervalle halbiert bei gleichem Tempo (Bosquet 2007: Volumen runter, Intensität halten).</li><li>3 Tage vorher keine schweren Beine mehr, 2 Tage vorher Ruhetag, am Vortag kurze Aktivierung.</li><li>Kein zusätzlicher BFT-Test in den 10 Tagen davor.</li></ul>')+
    d("BFT-Ablauf",'<ul class="tips"><li>Pendellauf 11×10 m: Start aus der Bauchlage. Bestehen unter 60 s, sehr gut um 42 s.</li><li>Klimmhang: Kammgriff (Untergriff), Kinn über der Stange. Bestehen ab 5 s, Bestnote ab ca. 65 s.</li><li>1000 m: 2,5 Runden. Bestehen unter 6:30.</li><li>Wende: tief, mit dem äußeren Fuß bremsen, kurze Schritte.</li></ul>')+
    d("Warnsignale",'<ul class="tips"><li>Punktueller Schienbeinschmerz, stechendes Knie, steife Achillessehne am Morgen.</li><li>Leistung sinkt 2 Wochen in Folge, schlechter Schlaf.</li><li>Dann: Freitagslauf weglassen, Woche wiederholen. Bleibt es, ärztlich abklären.</li></ul>');
@@ -681,6 +684,29 @@ function openUnit(u,d){
   if(u.kind==="test") return testSession(d);
   if(u.kind==="kc") return testSession(d,"kc");
   if(u.kind==="ergo") return ergoSession(u.plan,d);
+  if(u.kind==="drills") return drillSession(d);
+}
+/* ---------- Pendellauf-Drills (eigene Einheit, draußen vor dem lockeren Lauf) ---------- */
+function drillSession(d){
+  var w=planWeek(d), ph=phaseOf(d), red=reduced(w,ph,d), ds=iso(d);
+  var ex=S.logs.filter(function(l){ return l.type==="drills"&&l.date===ds; })[0];
+  var times=ex&&ex.sprints?ex.sprints.slice():[];
+  function draw(){
+    var h='<div class="shead"><button class="pill" id="dClose">Schließen</button><div class="sc"><div class="st">Pendellauf-Drills</div><div class="muted small">Woche '+w+(red?' · halbes Volumen':'')+'</div></div><button class="pill acc" id="dSave">Fertig</button></div>';
+    h+='<div class="fb info">Draußen auf ebenem Boden (Sportplatz, Parkplatz, Wiese). 10 Min. einlaufen, dann die Drills – <b>vor</b> dem lockeren Lauf, solange die Beine frisch sind.</div>';
+    h+='<div class="exc"><ul class="tips small"><li>5× Start aus der Bauchlage, 5 m Sprint (1 Min. Pause)</li><li>'+(red?'2×':'4×')+' 3×10 m mit Wende – tief, äußerer Fuß bremst (2 Min. Pause)</li><li>'+(red?'1×':'2×')+' kompletter Test 11×10 m, 4 Min. Pause – Zeit stoppen</li></ul>';
+    h+='<div class="timer" id="swT" style="font-size:44px">0,0</div><div class="btnrow"><button class="btn" id="swGo">Start</button><button class="btn2" id="swStop">Stopp</button></div>';
+    h+='<div class="small" style="margin-top:8px">Zeiten 11×10 m: <b id="swList">'+(times.length?times.map(function(x){return f1(x)+" s";}).join(" · "):"–")+'</b></div>';
+    h+='<label>oder Zeit manuell (Sek.)</label><div style="display:flex;gap:8px"><input id="dMan" inputmode="decimal" placeholder="44,5"><button class="btn2 mini" id="dSet">Übernehmen</button></div></div>';
+    $("sessSheet").innerHTML=h;
+    $("dClose").onclick=function(){ stopSW(); closeSess(); };
+    $("swGo").onclick=function(){ initAudio(); wake(true); startSW(); };
+    $("swStop").onclick=function(){ var t=stopSW(); if(t>3){ times.push(Math.round(t*10)/10); draw(); } };
+    $("dSet").onclick=function(){ var v=num($("dMan").value); if(v>20&&v<120){ times.push(Math.round(v*10)/10); draw(); } };
+    $("dSave").onclick=function(){ stopSW(); S.logs=S.logs.filter(function(l){ return !(l.type==="drills"&&l.date===ds); }); S.logs.push({id:ex?ex.id:uid(),date:ds,week:w,type:"drills",sprints:times}); save(); closeSess();
+      if(times.length){ var b=Math.min.apply(null,times); toast("Gespeichert – beste Zeit "+f1(b)+" s"+(b<42?" (Note-1-Bereich!)":"")); } };
+  }
+  draw();
 }
 /* ---------- Fahrradergometer ---------- */
 function ergoSession(plan,d){
