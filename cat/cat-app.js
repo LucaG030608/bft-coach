@@ -168,6 +168,10 @@
     } else if (kind === 'sim') {
       secs = LB[c.laufbahn].sections.map((x) => Object.assign({}, x));
       SES = { kind, title: 'Simulation · ' + LB[c.laufbahn].short, feedback: false, test: true, secs, prior: (a) => (c.theta[a] || 0) * 0.5 };
+    } else if (kind === 'atr') {
+      // Nachbau des offiziellen Online-Assessment-Trainers: 25 gemischte Fragen, 20 Min. Gesamtzeit, Uhr sichtbar
+      secs = [{ area: 'mix', n: 25, mode: 'section', time: 1200 }];
+      SES = { kind, title: 'Wie der Online-Trainer', feedback: false, test: true, uniform: true, secs, prior: (a) => (c.theta[a] || 0) * 0.5 };
     } else if (kind === 'area') {
       const sec = defSection(opt.area, opt.n || 15);
       if (opt.area === 'reaktion') sec.n = 20;
@@ -185,7 +189,7 @@
         mistQ: dueMistakes(B.today0()).slice(0, Math.round((opt.n || 25) * 0.3)) };
     }
     SES.timed = SES.test || c.timed !== false;
-    SES.hideClock = SES.test && c.hideClock !== false;
+    SES.hideClock = SES.test && c.hideClock !== false && kind !== 'atr';
     Object.assign(SES, { secIdx: 0, inSec: 0, resp: [], started: Date.now(), lastType: null, intro: SES.test });
     $('sessModal').classList.remove('hidden');
     B.wake(true);
@@ -201,6 +205,7 @@
   function pickMixArea() {
     const c = st();
     const r = Math.random(), w = weakest(2), all = trainAreas(c.laufbahn);
+    if (SES && SES.uniform) return all[Math.floor(Math.random() * all.length)];
     if (r < 0.4) return w[0];
     if (r < 0.6) return w[1] || w[0];
     return all[Math.floor(Math.random() * all.length)];
@@ -272,7 +277,7 @@
     return (sec.time >= 120 ? 'bis ' + Math.round(sec.time / 60) + ' Min.' : sec.time + ' s') + ' je Aufgabe';
   }
   function drawIntro() {
-    const sec = curSec(), a = AREAS[sec.area];
+    const sec = curSec(), a = AREAS[sec.area] || { name: 'Gemischte Aufgaben', intro: 'Aufbau wie der offizielle Assessment-Trainer der Bundeswehr: 25 Fragen aus allen Bereichen in zufälliger Reihenfolge, 20 Minuten für alles, Restzeit sichtbar. Leichte Fragen zügig beantworten, damit Zeit für schwere bleibt; bei Unsicherheit raten.' };
     let h = head(sectionLabel());
     h += '<div class="cat-intro"><div class="muted small">Teil ' + (SES.secIdx + 1) + ' von ' + SES.secs.length + '</div><h2>' + B.esc(a.name) + '</h2><p>' + B.esc(a.intro) + '</p>';
     h += '<div class="card pad"><div class="grid2">' + B.stat(sec.mode === 'block' ? 'Signale' : sec.mode === 'section' ? 'Aufgaben (max.)' : 'Aufgaben', sec.n) + B.stat('Zeit', secTimeText(sec)) + '</div>';
@@ -566,6 +571,7 @@
     h += '<div class="sec">Üben</div><div class="card">';
     const simDesc = c.laufbahn === 'offizier' ? 'Analogien, Matrizen, Mathe · je bis 3 Min. pro Aufgabe' : LB[c.laufbahn].sections.length + ' Teile wie im Karrierecenter';
     h += '<div class="row tap" id="cSim"><div class="ic">' + ICON.exam + '</div><div class="tx"><div class="t">Prüfungssimulation · ' + B.esc(LB[c.laufbahn].short) + '</div><div class="m">' + simDesc + ' · adaptiv, kein Zurück · ca. ' + simMinutes() + ' Min.</div></div><div class="end">' + B.IC.chev + '</div></div>';
+    h += '<div class="row tap" id="cAtr"><div class="ic">' + B.IC.clock + '</div><div class="tx"><div class="t">Wie der offizielle Online-Trainer</div><div class="m">25 gemischte Fragen · 20 Min. Gesamtzeit · Uhr sichtbar</div></div><div class="end">' + B.IC.chev + '</div></div>';
     h += '<div class="row tap" id="cPlace"><div class="ic">' + B.IC.target + '</div><div class="tx"><div class="t">' + (c.placed ? 'Einstufungstest wiederholen' : 'Einstufungstest') + '</div><div class="m">' + (c.placed ? 'Zuletzt am ' + B.fmtD(B.parseD(c.placed)) : 'Misst deinen Stand in allen Bereichen') + '</div></div><div class="end">' + B.IC.chev + '</div></div>';
     h += '<div class="row tap" id="cMist"><div class="ic">' + ICON.redo + '</div><div class="tx"><div class="t">Fehler wiederholen</div><div class="m">' + (dm ? dm + ' fällig' : 'Nichts fällig') + ' · ' + c.mist.length + ' im Speicher</div></div><div class="end">' + B.IC.chev + '</div></div>';
     h += '<div class="row tap" id="cPers"><div class="ic">' + ICON.brain + '</div><div class="tx"><div class="t">Persönlichkeitsteil kennenlernen</div><div class="m">24 Aussagen „trifft zu / nicht zu“ · ohne Wertung</div></div><div class="end">' + B.IC.chev + '</div></div>';
@@ -578,7 +584,7 @@
     const hist = c.hist.slice(-8).reverse();
     if (hist.length) {
       h += '<div class="sec">Verlauf</div><div class="card">';
-      const nm = { pers: 'Persönlichkeitsteil', check: 'Kontrolltest', placement: 'Einstufungstest', sim: 'Simulation', train: 'Training', area: 'Bereichstraining', mist: 'Wiederholung' };
+      const nm = { atr: 'Wie Online-Trainer', pers: 'Persönlichkeitsteil', check: 'Kontrolltest', placement: 'Einstufungstest', sim: 'Simulation', train: 'Training', area: 'Bereichstraining', mist: 'Wiederholung' };
       hist.forEach((x) => { h += '<div class="row"><div class="tx"><div class="t">' + nm[x.kind] + '</div><div class="m">' + B.fmtD(B.parseD(x.date)) + ' · ' + x.ok + '/' + x.n + ' richtig' + (x.min ? ' · ' + x.min + ' Min.' : '') + '</div></div><div class="end">' + (x.overall != null ? '<b>' + x.overall + '</b>' : '') + '</div></div>'; });
       h += '</div>';
     }
@@ -592,6 +598,7 @@
     const tr = $('catToday'); if (tr) tr.onclick = () => startTask(t);
     $('cSim').onclick = () => startSession('sim');
     $('cPlace').onclick = () => startSession('placement');
+    $('cAtr').onclick = () => startSession('atr');
     $('cMist').onclick = () => startSession('mist');
     el.querySelectorAll('[data-area]').forEach((r) => { r.onclick = () => startSession('area', { area: r.dataset.area, n: 15 }); });
     $('cLb').onchange = (e) => { c.laufbahn = e.target.value; save(); render(); };
@@ -605,7 +612,7 @@
     return d('Lernmethoden mit Wirkung', '<ul class="tips"><li><b>Üben mit Aufgaben</b> statt Wiederlesen – eine der zwei wirksamsten Lerntechniken (Dunlosky et al. 2013).</li><li><b>Verteilt lernen:</b> täglich kurz statt selten lang; Fehler kommen nach 1, 3, 7, 14, 28 Tagen wieder (Cepeda et al. 2008).</li><li><b>Mischen</b> statt Blöcke: deutlich bessere Testergebnisse, obwohl es sich schwerer anfühlt (Rohrer & Taylor).</li><li><b>Übungseffekt</b> bei Eignungstests ist real, aber moderat – er kommt vor allem aus Vertrautheit mit Aufgabentypen und Testsituation (Hausknecht et al. 2007).</li><li><b>Schlaf</b> über Wochen zählt mehr als die Nacht vor dem Test.</li><li><b>Kontrolltest alle 2 Wochen</b> (Grundlagen- und Aufbauphase): 3 Aufgaben je Bereich, zeigt deinen Fortschritt und passt die Schwerpunkte an.</li></ul>') +
       d('Abstimmung mit dem BFT-Plan', '<ul class="tips"><li>An Tagen mit Intervallen oder Marsch: rund 40 % weniger CAT-Aufgaben.</li><li>Am BFT-Testtag: nur 10 lockere Aufgaben.</li><li>Simulationen und Kontrolltests liegen nie auf harten Trainingstagen. Fällt eine Simulation darauf, rutscht sie auf den nächsten ruhigeren Tag.</li></ul>') +
       d('Phasen bis zum Test', '<ul class="tips">' + PHASES.map((p) => '<li><b>' + p.name + '</b>' + (p.key === 'grund' ? ' (bis ' + p.to + ' Tage vorher)' : ' (' + p.from + '–' + p.to + ' Tage vorher)') + ': ' + p.tip + '</li>').join('') + '</ul>') +
-      d('Wie realistisch ist der Test?', '<ul class="tips"><li>Die echten Aufgaben sind nicht öffentlich. Grundlage hier: offizielle Bundeswehr-Angaben, eine von der Bundeswehr genehmigte Dissertation (2012) mit Beschreibungen der CAT-Subtests, über 20 Erfahrungsberichte (Forum, Videos) und 8 Übungsanbieter (Stand 28.11.2026).</li><li><b>Köln (Offiziere):</b> ca. 30 Aufgaben – Wortanalogien, Matrizen, Mathe – je bis ca. 3 Min.</li><li><b>Karrierecenter:</b> lange Testbatterie mit Rechtschreibung, Technik (Zeit für den ganzen Teil, Ratekorrektur), Reaktion, Symbolrechnen u. a.</li><li>Uhr im echten Test meist nicht sichtbar; Matrizen mit 8, Analogien mit 5 Antworten.</li><li>Genaue Aufgabenzahlen, Zeiten und Grenzwerte veröffentlicht die Bundeswehr nicht – diese Werte sind begründete Schätzungen. Die Reaktionsaufgabe ist nachempfunden.</li><li>Würfel, Figurenreihen, Zahlenreihen und Allgemeinwissen sind im echten CAT kaum belegt und deshalb nur als Zusatz enthalten.</li></ul>');
+      d('Wie realistisch ist der Test?', '<ul class="tips"><li>Die echten Aufgaben sind nicht öffentlich. Grundlage hier: offizielle Bundeswehr-Angaben, eine von der Bundeswehr genehmigte Dissertation (2012) mit Beschreibungen der CAT-Subtests, über 20 Erfahrungsberichte (Forum, Videos) und 8 Übungsanbieter (Stand 28.11.2026).</li><li><b>Köln (Offiziere):</b> ca. 30 Aufgaben – Wortanalogien, Matrizen, Mathe – je bis ca. 3 Min.</li><li><b>Karrierecenter:</b> lange Testbatterie mit Rechtschreibung, Technik (Zeit für den ganzen Teil, Ratekorrektur), Reaktion, Symbolrechnen u. a.</li><li>Uhr im echten Test meist nicht sichtbar; Matrizen mit 8, Analogien mit 5 Antworten.</li><li>Genaue Aufgabenzahlen, Zeiten und Grenzwerte veröffentlicht die Bundeswehr nicht – diese Werte sind begründete Schätzungen. Die Reaktionsaufgabe ist nachempfunden.</li><li>Würfel, Figurenreihen, Zahlenreihen und Allgemeinwissen sind im echten CAT kaum belegt und deshalb nur als Zusatz enthalten.</li><li>Die Karrierecenter empfehlen den offiziellen <a href="https://www.bundeswehrkarriere.de/dialog/digitales-karrierecenter/assessment-trainer" target="_blank" rel="noopener">Assessment-Trainer auf bundeswehrkarriere.de</a> (25 Fragen, 20 Min.) – unbedingt zusätzlich machen.</li></ul>');
   }
 
   /* =================== Einbindung =================== */

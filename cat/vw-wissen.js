@@ -36,9 +36,9 @@ CAT.WISSEN = [
   { k: 'ga', q: 'Wie viele Paar Kampfstiefel bekommt man?', a: 'Zwei Paar (leicht und schwer).', s: 'BW Ausrüstung' },
   { k: 'ga', q: 'Was ist das „Zwiebelschalenprinzip“ bei der Bekleidung?', a: 'Mehrere Schichten übereinander (Unterwäsche, Kälte- und Nässeschutz, Kampfjacke), die je nach Wetter an- oder ausgezogen werden.', s: 'BW Ausrüstung' },
   { k: 'ga', q: 'Was müssen Rekruten nach der Ausbildung können (Formaldienst)?', a: 'Die Dienstgrade kennen, im Gleichschritt marschieren und militärisch grüßen.', s: 'BW Fragen & Antworten' },
-  { k: 'ga', q: 'Wann grüßt man im Dienst?', a: 'Nur bei der ersten Begegnung des Tages – und erst nach bestandener Grußabnahme.', s: 'BW Grundausbildung (Formaldienst)' },
-  { k: 'ga', q: 'Wie ist eine Meldung an einen Vorgesetzten aufgebaut?', a: 'Anrede mit Dienstgrad des Vorgesetzten, eigener Dienstgrad und Name, dann das Anliegen – z. B. „Herr Hauptfeldwebel, Schütze Meier meldet …“. Die genaue Form wird im Formaldienst geübt.', s: 'BW Grundausbildung (Formaldienst)' },
-  { k: 'ga', q: 'Wie redet man Vorgesetzte an?', a: 'Mit „Herr“ bzw. „Frau“ und dem Dienstgrad, z. B. „Frau Oberleutnant“.', s: 'allg. (Formaldienst)' },
+  { k: 'gruss', q: 'Wann grüßt man im Dienst?', a: 'Nur bei der ersten Begegnung des Tages – und erst nach bestandener Grußabnahme.', s: 'BW Grundausbildung (Formaldienst)' },
+  { k: 'gruss', q: 'Wie lautet die Grundform einer Meldung?', a: '„Herr/Frau [Dienstgrad des Vorgesetzten], [eigener Dienstgrad] [Name], melde, [Anlass]!“', s: 'Y-Magazin „Lifehacks“ (bundeswehr.de)' },
+  { k: 'gruss', q: 'Wie lautet die dienstliche Anrede?', a: '„Frau/Herr“ + Dienstgrad – gegenüber höheren UND niedrigeren Dienstgraden. Bei Generalen und Admiralen: „Herr General“, „Herr Admiral“.', s: 'Richtlinie A2-2630/0-0-3 (2016) Rn 622' },
   { k: 'ga', q: 'Mit welchem Dienstgrad beginnen alle Rekruten?', a: 'Mit dem niedrigsten: Schütze (Heer), Flieger (Luftwaffe) oder Matrose (Marine).', s: 'BW / Dienstgrad-Infografik' },
 
   /* ---------- Waffen ---------- */

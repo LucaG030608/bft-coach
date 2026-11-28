@@ -19,7 +19,12 @@
   function cards() {
     const v = st(), out = [];
     C.WISSEN.forEach((w, i) => out.push({ id: 'w' + i, k: w.k, q: w.q, a: w.a, s: w.s }));
-    C.NATO.forEach((n) => out.push({ id: 'n' + n[0], k: 'nato', q: 'Buchstabe ' + n[0] + ' im NATO-Alphabet?', a: n, s: 'allg. (ICAO-Standard)' }));
+    C.NATO.forEach((n) => out.push({ id: 'n' + n[0], k: 'nato', sub: 'buch', q: 'Buchstabe ' + n[0] + ' im NATO-Alphabet?', a: n, s: 'Y-Magazin „Lifehacks“ / ICAO-Standard' }));
+    (C.NATO_ZAHLEN || []).forEach(([z, w]) => out.push({ id: 'nz' + z, k: 'nato', sub: 'zahl', q: 'Wie spricht man die Zahl ' + z + ' im Sprechfunk?', a: w, s: 'Y-Magazin „Lifehacks“' }));
+    (C.MERK || []).forEach((m) => {
+      out.push({ id: 'm' + m.w, k: 'merk', sub: 'full', q: 'Wofür steht „' + m.w + '“ (' + m.t + ')?', a: m.l.map(([b, t]) => b + ' – ' + t).join(', '), s: 'Y-Magazin „Lifehacks“' });
+      m.l.forEach(([b, t], i) => out.push({ id: 'm' + m.w + i, k: 'merk', sub: m.w, q: m.w + ' (' + m.t + '): Wofür steht das ' + (i + 1) + '. „' + b + '“?', a: t, s: 'Y-Magazin „Lifehacks“' }));
+    });
     ranks(v.tsk).forEach((d) => out.push({ id: 'd' + d.id, k: 'dg', q: 'Welcher Dienstgrad ist das?', html: img(d, 'dgimg big'), a: d.name, s: 'Dienstgrad-Infografik © Bundeswehr', dg: d }));
     return out;
   }
@@ -35,7 +40,9 @@
 
   /* ---------- Fragen erzeugen ---------- */
   function mcFromCard(c, pool) {
-    const others = shuffle(pool.filter((x) => x.k === c.k && x.a !== c.a)).slice(0, 3).map((x) => x.a);
+    let cand = pool.filter((x) => x.k === c.k && x.a !== c.a && (!c.sub || x.sub === c.sub));
+    if (cand.length < 3) cand = pool.filter((x) => x.k === c.k && x.a !== c.a);
+    const others = [...new Set(shuffle(cand).map((x) => x.a))].slice(0, 3);
     const opts = shuffle([c.a, ...others]);
     return { id: c.id, stem: c.q, html: c.html || '', opts, ans: opts.indexOf(c.a), explain: c.a, s: c.s };
   }
@@ -150,7 +157,8 @@
     } else {
       Object.keys(C.WISSEN_KAT).filter((k) => k !== 'dg').forEach((k) => {
         h += '<div class="sec">' + B.esc(C.WISSEN_KAT[k]) + '</div><div class="card pad">';
-        if (k === 'nato') h += '<div class="nato">' + C.NATO.map((n) => '<span><b>' + n[0] + '</b> ' + n + '</span>').join('') + '</div>';
+        if (k === 'nato') h += '<div class="nato">' + C.NATO.map((n) => '<span><b>' + n[0] + '</b> ' + n + '</span>').join('') + '</div><div class="nato" style="margin-top:12px">' + (C.NATO_ZAHLEN || []).map(([z, w]) => '<span><b>' + z + '</b> ' + w + '</span>').join('') + '</div>';
+        else if (k === 'merk') h += (C.MERK || []).map((m) => '<div class="goal"><b>' + B.esc(m.w) + '</b> <span class="muted small">' + B.esc(m.t) + '</span><div>' + m.l.map(([b, t]) => '<b>' + B.esc(b) + '</b> ' + B.esc(t)).join(' · ') + '</div></div>').join('');
         else C.WISSEN.filter((w) => w.k === k).forEach((w) => { h += '<div class="goal"><b>' + B.esc(w.q) + '</b><div>' + B.esc(w.a) + '</div><div class="muted small">' + B.esc(w.s) + '</div></div>'; });
         h += '</div>';
       });
